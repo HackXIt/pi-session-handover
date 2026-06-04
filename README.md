@@ -25,9 +25,16 @@ npm exec -- pi --extension ./src/index.ts
 
 If no argument is supplied, the extension prompts for what the next agent should continue.
 
-## Project configuration
+## Configuration
 
-Create `.pi/handover.json` to configure behavior:
+Configuration is resolved in this order:
+
+1. Built-in defaults.
+2. Global user config at `~/.pi/agent/extensions/pi-agent-handoff.json`.
+3. Project config in `.pi/handover.json` plus `.pi/handover.md`.
+4. Session metadata overrides used by task-specific commands and orchestrators.
+
+Create `.pi/handover.json` to configure project behavior:
 
 ```json
 {
@@ -48,11 +55,22 @@ Create `.pi/handover.json` to configure behavior:
 
 Create `.pi/handover.md` for longer project-specific rules. Its contents are appended to the handover instruction sent to the current agent.
 
+Use the same JSON shape for global user config when you want defaults across projects. Keep global config minimal, for example:
+
+```json
+{
+  "reviewPromptBeforeStart": true,
+  "nextPromptInstructions": "Write a self-contained prompt with context, changed files, verification status, risks, and exact next steps."
+}
+```
+
 ## Commands and tools
 
 - `/handover <description>` — ask the current agent to close and prepare a new-session prompt.
+- `/handover status` — inspect pending handover state and resume/cancel after reload.
+- `/handover cancel` — cancel pending handover state.
 - `/handover-continue <id>` — internal command queued by the tool.
-- `handover_complete` — tool the current agent calls with the final `nextPrompt`.
+- `handover_complete` — tool the current agent calls with the final `nextPrompt`, summary, and closure checklist.
 
 ## Verify
 

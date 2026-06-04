@@ -2,11 +2,11 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { defaultConfig, loadHandoverConfig, mergeConfig } from "../src/config.js";
+import { HANDOVER_SESSION_CONFIG_ENTRY, defaultConfig, loadHandoverConfig, mergeConfig } from "../src/config.js";
 
 it("keeps defaults without project config", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "handover-config-"));
-	await expect(loadHandoverConfig(dir)).resolves.toEqual(defaultConfig);
+	await expect(loadHandoverConfig(dir, { globalConfigPath: join(dir, "missing-global.json") })).resolves.toEqual(defaultConfig);
 });
 
 it("merges json config and markdown project rules", async () => {
@@ -22,7 +22,7 @@ it("merges json config and markdown project rules", async () => {
 	);
 	await writeFile(join(dir, ".pi", "handover.md"), "Always mention the plan file.");
 
-	const config = await loadHandoverConfig(dir);
+	const config = await loadHandoverConfig(dir, { globalConfigPath: join(dir, "missing-global.json") });
 	expect(config.reviewPromptBeforeStart).toBe(false);
 	expect(config.taskInputMultiline).toBe(true);
 	expect(config.completionSteps).toEqual([{ name: "Perforce", description: "Submit the changelist." }]);
@@ -32,4 +32,30 @@ it("merges json config and markdown project rules", async () => {
 it("ignores invalid completion steps", () => {
 	const config = mergeConfig(defaultConfig, { completionSteps: [{ description: "missing name" }] });
 	expect(config.completionSteps).toEqual(defaultConfig.completionSteps);
+});
+
+it("layers built-ins, global config, project config, markdown rules, and session overrides", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "handover-config-"));
+	const globalPath = join(dir, "global.json");
+	await writeFile(globalPath, JSON.stringify({ reviewPromptBeforeStart: false, taskInputPrompt: "Global task?" }));
+	await mkdir(join(dir, ".pi"));
+	await writeFile(join(dir, ".pi", "handover.json"), JSON.stringify({ taskInputPrompt: "Project task?", taskInputMultiline: true }));
+	await writeFile(join(dir, ".pi", "handover.md"), "Project rules win.");
+
+	const config = await loadHandoverConfig(dir, {
+		globalConfigPath: globalPath,
+		entries: [
+			{
+				type: "custom",
+				customType: HANDOVER_SESSION_CONFIG_ENTRY,
+				data: { taskInputMultiline: false, nextPromptInstructions: "Session prompt instructions." },
+			},
+		],
+	});
+
+	expect(config.reviewPromptBeforeStart).toBe(false);
+	expect(config.taskInputPrompt).toBe("Project task?");
+	expect(config.taskInputMultiline).toBe(false);
+	expect(config.nextPromptInstructions).toBe("Session prompt instructions.");
+	expect(config.projectRules).toBe("Project rules win.");
 });

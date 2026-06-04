@@ -1,10 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export type HandoverStep = {
 	name: string;
 	description: string;
 };
+
+export const HANDOVER_SESSION_CONFIG_ENTRY = "pi-agent-handoff:session-config";
 
 export type HandoverConfig = {
 	agentInstructions: string;
@@ -40,6 +43,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+type EntryLike = { type: string; customType?: string; data?: unknown };
+
+type LoadHandoverConfigOptions = {
+	entries?: EntryLike[];
+	globalConfigPath?: string;
+};
+
 function parseSteps(value: unknown): HandoverStep[] | undefined {
 	if (!Array.isArray(value)) return undefined;
 	const steps = value
@@ -68,22 +78,37 @@ export function mergeConfig(base: HandoverConfig, override: unknown): HandoverCo
 				? override.reviewPromptBeforeStart
 				: base.reviewPromptBeforeStart,
 		completionSteps: parseSteps(override.completionSteps) ?? base.completionSteps,
+		projectRules: typeof override.projectRules === "string" ? override.projectRules : base.projectRules,
 	};
 }
 
-export async function loadHandoverConfig(cwd: string): Promise<HandoverConfig> {
-	let config = defaultConfig;
+function getLatestSessionOverride(entries: EntryLike[] | undefined): unknown {
+	return entries?.filter((entry) => entry.type === "custom" && entry.customType === HANDOVER_SESSION_CONFIG_ENTRY).at(-1)?.data;
+}
+
+async function mergeJsonFile(config: HandoverConfig, path: string): Promise<HandoverConfig> {
 	try {
-		const json = await readFile(join(cwd, ".pi", "handover.json"), "utf8");
-		config = mergeConfig(config, JSON.parse(json));
+		const json = await readFile(path, "utf8");
+		return mergeConfig(config, JSON.parse(json));
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+		return config;
 	}
+}
+
+export function getGlobalHandoverConfigPath(): string {
+	return join(getAgentDir(), "extensions", "pi-agent-handoff.json");
+}
+
+export async function loadHandoverConfig(cwd: string, options: LoadHandoverConfigOptions = {}): Promise<HandoverConfig> {
+	let config = defaultConfig;
+	config = await mergeJsonFile(config, options.globalConfigPath ?? getGlobalHandoverConfigPath());
+	config = await mergeJsonFile(config, join(cwd, ".pi", "handover.json"));
 	try {
 		const projectRules = await readFile(join(cwd, ".pi", "handover.md"), "utf8");
 		config = { ...config, projectRules };
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 	}
-	return config;
+	return mergeConfig(config, getLatestSessionOverride(options.entries));
 }

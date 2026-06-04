@@ -207,25 +207,31 @@ These are intentionally left for a follow-up slice rather than expanding the fir
 
 ## Current implementation position
 
-The first usability upgrade is complete and pushed. Two follow-up slices are also implemented:
+The first usability upgrade is complete and pushed. Three follow-up slices are also implemented:
 
 - Replacement-session metadata persistence: `handover-continue` appends `pi-agent-handoff:metadata` in the replacement session setup before sending the visible next prompt.
 - Integrated review editing: the handover review overlay now embeds the editable next-session prompt directly in the review modal.
+- Settings layering: configuration now resolves in built-in → global user file → project file/markdown → session metadata order. Global config lives at `${getAgentDir()}/extensions/pi-agent-handoff.json`; session overrides are metadata-only for orchestrator/task-specific command support, not a generic user-facing config mutation command.
 
 Remaining recommended follow-up slices:
 
-1. Implement settings layering.
-2. Implement wizard mode.
-3. Implement automatic handover mode.
+1. Implement wizard mode.
+2. Implement automatic handover mode.
 
 ## Later slices
 
 ### Settings layering
 
-- Add global settings support.
-- Define final project config schema.
-- Implement session/project/global/built-in merge behavior.
-- Document minimal recommended config.
+Implemented:
+
+- [x] Add global settings support via `${getAgentDir()}/extensions/pi-agent-handoff.json`.
+- [x] Reuse the existing project config schema for global, project, and session metadata overrides.
+- [x] Implement built-in → global → project → session precedence.
+- [x] Keep session overrides metadata-only; user-facing slash commands should perform task-specific actions instead of arbitrary config mutation.
+
+Documentation:
+
+- [x] Document minimal recommended config and precedence in README.
 
 ### Wizard mode
 

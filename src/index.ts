@@ -150,7 +150,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const config = await loadHandoverConfig(ctx.cwd);
+			const config = await loadHandoverConfig(ctx.cwd, { entries: ctx.sessionManager.getEntries() });
 			let description = subcommand;
 
 			if (!description && config.taskInputRequired) {
@@ -226,7 +226,7 @@ export default function (pi: ExtensionAPI) {
 		],
 		parameters: handoverCompleteSchema,
 		async execute(_toolCallId, params: HandoverCompleteInput, _signal, _onUpdate, ctx) {
-			const config = await loadHandoverConfig(ctx.cwd);
+			const config = await loadHandoverConfig(ctx.cwd, { entries: ctx.sessionManager.getEntries() });
 			const checklist = normalizeChecklist(params.completedSteps ?? []);
 			const id = makeId();
 			const item: PendingHandover = {
