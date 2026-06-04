@@ -25,5 +25,5 @@ ${config.nextPromptInstructions}
 When the current turn is closed, call the handover_complete tool with:
 - nextPrompt: the exact prompt to send as the first user message in the new pi session
 - summary: a concise completion summary for this turn
-- completedSteps: the closure steps you completed or explicitly marked blocked${projectRules}`;
+- completedSteps: structured closure checklist items; each item needs id or name, status (done, blocked, or skipped), notes, and optional evidence. Blocked items must explain the blocker in notes.${projectRules}`;
 }

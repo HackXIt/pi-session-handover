@@ -10,5 +10,7 @@ it("builds the exact continuation request with closure rules", () => {
 	expect(prompt).toContain("Please write a prompt for a new agent session to continue phase 2 of docs/PLAN.md and take over from here.");
 	expect(prompt).toContain("1. Build:");
 	expect(prompt).toContain("handover_complete");
+	expect(prompt).toContain("structured closure checklist items");
+	expect(prompt).toContain("status (done, blocked, or skipped)");
 	expect(prompt).toContain("Push to origin before handover.");
 });

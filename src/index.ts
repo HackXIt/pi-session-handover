@@ -2,40 +2,151 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { Static } from "@sinclair/typebox";
 import { loadHandoverConfig } from "./config.js";
+import {
+	HANDOVER_PENDING_ENTRY,
+	HANDOVER_RESOLVED_ENTRY,
+	findPendingHandover,
+	normalizeChecklist,
+	shouldReviewHandover,
+	type PendingHandover,
+} from "./domain.js";
 import { buildAgentHandoverRequest } from "./prompt.js";
+
+const checklistItemSchema = Type.Union([
+	Type.String(),
+	Type.Object({
+		id: Type.Optional(Type.String({ description: "Stable closure-step id." })),
+		name: Type.Optional(Type.String({ description: "Human-readable closure-step name." })),
+		status: Type.Union([Type.Literal("done"), Type.Literal("blocked"), Type.Literal("skipped")]),
+		notes: Type.Optional(Type.String({ description: "Short closure note. Required when status is blocked." })),
+		evidence: Type.Optional(Type.Unknown({ description: "Commands, commits, branches, validation output, or other proof." })),
+	}),
+]);
 
 const handoverCompleteSchema = Type.Object({
 	nextPrompt: Type.String({ description: "The exact first user message for the replacement pi session." }),
 	summary: Type.Optional(Type.String({ description: "Concise summary of the completed current turn." })),
 	completedSteps: Type.Optional(
-		Type.Array(Type.String(), {
-			description: "Closure steps completed or explicitly marked blocked before handover.",
+		Type.Array(checklistItemSchema, {
+			description: "Closure checklist items. Plain strings are accepted as compatibility and treated as done.",
 		}),
 	),
 });
 
 type HandoverCompleteInput = Static<typeof handoverCompleteSchema>;
 
-type PendingHandover = {
-	nextPrompt: string;
-	summary?: string;
-	completedSteps: string[];
-	parentSession?: string;
-	reviewPromptBeforeStart: boolean;
-};
+type ReviewChoice = "accept" | "edit" | "cancel";
 
 function makeId(): string {
 	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function truncate(text: string, width: number): string {
+	return text.length > width ? `${text.slice(0, Math.max(0, width - 1))}…` : text;
+}
+
+function checklistLine(item: PendingHandover["checklist"][number]): string {
+	const status = item.status === "done" ? "✓" : item.status === "blocked" ? "!" : "-";
+	const evidence = item.evidence === undefined ? "" : ` evidence=${JSON.stringify(item.evidence)}`;
+	return `${status} ${item.name}${item.notes ? ` — ${item.notes}` : ""}${evidence}`;
+}
+
+function pendingSummary(item: PendingHandover): string {
+	const blocked = item.checklist.filter((step) => step.status === "blocked").length;
+	return `Pending handover ${item.id}: ${item.checklist.length} checklist item(s), ${blocked} blocked.`;
+}
+
+async function reviewPendingHandover(ctx: Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1], item: PendingHandover): Promise<string | undefined> {
+	let nextPrompt = item.nextPrompt;
+	while (true) {
+		const choice = await ctx.ui.custom<ReviewChoice>((_tui, theme, _kb, done) => ({
+			render(width: number) {
+				const bodyWidth = Math.max(20, width - 4);
+				const lines = [
+					theme.fg("accent", theme.bold("Handover review")),
+					pendingSummary(item),
+					"",
+					theme.fg("accent", "Summary"),
+					...(item.summary ? item.summary.split("\n") : ["(none)"]),
+					"",
+					theme.fg("accent", "Checklist"),
+					...(item.checklist.length > 0 ? item.checklist.map(checklistLine) : ["(none supplied)"]),
+					"",
+					theme.fg("accent", "Next-session prompt preview"),
+					...nextPrompt.split("\n").slice(0, 10),
+					"",
+					theme.fg("dim", "enter accept • e edit prompt • esc/c cancel"),
+				];
+				return lines.map((line) => truncate(line, bodyWidth));
+			},
+			handleInput(data: string) {
+				if (data === "\r" || data === "\n") done("accept");
+				if (data.toLowerCase() === "e") done("edit");
+				if (data === "\x1b" || data.toLowerCase() === "c") done("cancel");
+			},
+			invalidate() {},
+		}), { overlay: true, overlayOptions: { width: "80%", maxHeight: "80%", minWidth: 60 } });
+
+		if (choice === "accept") return nextPrompt;
+		if (choice === "cancel") return undefined;
+		const edited = await ctx.ui.editor("Edit handover prompt for the new session", nextPrompt);
+		if (edited === undefined) return undefined;
+		nextPrompt = edited;
+	}
+}
+
 export default function (pi: ExtensionAPI) {
 	const pending = new Map<string, PendingHandover>();
+
+	function rememberFromEntries(ctx: { sessionManager: { getEntries(): Array<{ type: string; customType?: string; data?: unknown }> } }) {
+		const item = findPendingHandover(ctx.sessionManager.getEntries());
+		if (item) pending.set(item.id, item);
+		return item;
+	}
+
+	function getPending(ctx: { sessionManager: { getEntries(): Array<{ type: string; customType?: string; data?: unknown }> } }, id?: string) {
+		const fromEntries = rememberFromEntries(ctx);
+		return id ? pending.get(id) : fromEntries ?? Array.from(pending.values()).at(-1);
+	}
+
+	pi.on("session_start", async (_event, ctx) => {
+		const item = rememberFromEntries(ctx);
+		if (item) ctx.ui.notify(`${pendingSummary(item)} Run /handover status to resume or cancel.`, "warning");
+	});
 
 	pi.registerCommand("handover", {
 		description: "Close this turn and hand over to a fresh pi session",
 		handler: async (args, ctx) => {
+			const subcommand = args.trim();
+			if (subcommand === "status") {
+				const item = getPending(ctx);
+				if (!item) {
+					ctx.ui.notify("No pending handover", "info");
+					return;
+				}
+				const action = await ctx.ui.select(`${pendingSummary(item)} What now?`, ["Resume", "Cancel", "Dismiss"]);
+				if (action === "Resume") pi.sendUserMessage(`/handover-continue ${item.id}`);
+				if (action === "Cancel") {
+					pending.delete(item.id);
+					pi.appendEntry(HANDOVER_RESOLVED_ENTRY, { id: item.id, reason: "cancelled", at: new Date().toISOString() });
+					ctx.ui.notify("Pending handover cancelled", "info");
+				}
+				return;
+			}
+			if (subcommand === "cancel") {
+				const item = getPending(ctx);
+				if (!item) {
+					ctx.ui.notify("No pending handover", "info");
+					return;
+				}
+				pending.delete(item.id);
+				pi.appendEntry(HANDOVER_RESOLVED_ENTRY, { id: item.id, reason: "cancelled", at: new Date().toISOString() });
+				ctx.ui.notify("Pending handover cancelled", "info");
+				return;
+			}
+
 			const config = await loadHandoverConfig(ctx.cwd);
-			let description = args.trim();
+			let description = subcommand;
 
 			if (!description && config.taskInputRequired) {
 				const input = config.taskInputMultiline
@@ -62,22 +173,24 @@ export default function (pi: ExtensionAPI) {
 		description: "Internal command used by pi-agent-handoff to start the replacement session",
 		handler: async (args, ctx) => {
 			const id = args.trim();
-			const item = pending.get(id);
+			const item = getPending(ctx, id);
 			if (!item) {
 				ctx.ui.notify("No pending handover prompt found", "error");
 				return;
 			}
-			pending.delete(id);
 
 			let nextPrompt = item.nextPrompt;
 			if (item.reviewPromptBeforeStart) {
-				const edited = await ctx.ui.editor("Review handover prompt for the new session", nextPrompt);
-				if (edited === undefined) {
+				const reviewed = await reviewPendingHandover(ctx, item);
+				if (reviewed === undefined) {
 					ctx.ui.notify("Handover cancelled", "info");
 					return;
 				}
-				nextPrompt = edited;
+				nextPrompt = reviewed;
 			}
+
+			pending.delete(id);
+			pi.appendEntry(HANDOVER_RESOLVED_ENTRY, { id, reason: "resumed", at: new Date().toISOString() });
 
 			const result = await ctx.newSession({
 				parentSession: item.parentSession,
@@ -101,18 +214,24 @@ export default function (pi: ExtensionAPI) {
 		promptGuidelines: [
 			"Use handover_complete only after the current turn's configured closure steps are complete or explicitly blocked.",
 			"When using handover_complete, provide a self-contained nextPrompt for a fresh agent session.",
+			"Provide structured completedSteps with status, notes, and optional evidence. Blocked steps require notes and force user review.",
 		],
 		parameters: handoverCompleteSchema,
 		async execute(_toolCallId, params: HandoverCompleteInput, _signal, _onUpdate, ctx) {
 			const config = await loadHandoverConfig(ctx.cwd);
+			const checklist = normalizeChecklist(params.completedSteps ?? []);
 			const id = makeId();
-			pending.set(id, {
+			const item: PendingHandover = {
+				id,
 				nextPrompt: params.nextPrompt,
 				summary: params.summary,
-				completedSteps: params.completedSteps ?? [],
+				checklist,
 				parentSession: ctx.sessionManager.getSessionFile(),
-				reviewPromptBeforeStart: config.reviewPromptBeforeStart,
-			});
+				reviewPromptBeforeStart: shouldReviewHandover(config.reviewPromptBeforeStart, checklist),
+				createdAt: new Date().toISOString(),
+			};
+			pending.set(id, item);
+			pi.appendEntry(HANDOVER_PENDING_ENTRY, item);
 
 			pi.sendUserMessage(`/handover-continue ${id}`, { deliverAs: "followUp" });
 
@@ -123,7 +242,7 @@ export default function (pi: ExtensionAPI) {
 						text: "Handover prompt accepted. The extension queued creation of a fresh pi session after this turn goes idle.",
 					},
 				],
-				details: { id, completedSteps: params.completedSteps ?? [] },
+				details: { id, checklist, reviewPromptBeforeStart: item.reviewPromptBeforeStart },
 				terminate: true,
 			};
 		},
