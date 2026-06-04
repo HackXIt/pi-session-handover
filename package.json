@@ -1,0 +1,33 @@
+{
+  "name": "@hackxit/pi-agent-handoff",
+  "version": "0.1.0",
+  "description": "Pi extension for closing one agent turn and handing over to a new session",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "ci": "npm test && npm run typecheck"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.75.5",
+    "@earendil-works/pi-ai": "^0.75.5",
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "@sinclair/typebox": "^0.34.49"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
