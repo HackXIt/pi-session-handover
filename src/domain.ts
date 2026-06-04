@@ -1,5 +1,6 @@
 export const HANDOVER_PENDING_ENTRY = "pi-agent-handoff:pending";
 export const HANDOVER_RESOLVED_ENTRY = "pi-agent-handoff:resolved";
+export const HANDOVER_METADATA_ENTRY = "pi-agent-handoff:metadata";
 
 export type ChecklistStatus = "done" | "blocked" | "skipped";
 
@@ -29,6 +30,15 @@ export type PendingHandover = {
 	parentSession?: string;
 	reviewPromptBeforeStart: boolean;
 	createdAt: string;
+};
+
+export type HandoverMetadata = {
+	id: string;
+	parentSession?: string;
+	summary?: string;
+	checklist: HandoverChecklistItem[];
+	createdAt: string;
+	receivedAt: string;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -74,6 +84,17 @@ export function hasBlockedChecklistItem(checklist: HandoverChecklistItem[]): boo
 
 export function shouldReviewHandover(configReview: boolean, checklist: HandoverChecklistItem[]): boolean {
 	return configReview || hasBlockedChecklistItem(checklist);
+}
+
+export function createHandoverMetadata(item: PendingHandover, receivedAt: string): HandoverMetadata {
+	return {
+		id: item.id,
+		...(item.parentSession ? { parentSession: item.parentSession } : {}),
+		...(item.summary ? { summary: item.summary } : {}),
+		checklist: item.checklist,
+		createdAt: item.createdAt,
+		receivedAt,
+	};
 }
 
 export function findPendingHandover(entries: Array<{ type: string; customType?: string; data?: unknown }>): PendingHandover | undefined {

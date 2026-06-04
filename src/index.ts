@@ -3,8 +3,10 @@ import { Type } from "@sinclair/typebox";
 import type { Static } from "@sinclair/typebox";
 import { loadHandoverConfig } from "./config.js";
 import {
+	HANDOVER_METADATA_ENTRY,
 	HANDOVER_PENDING_ENTRY,
 	HANDOVER_RESOLVED_ENTRY,
+	createHandoverMetadata,
 	findPendingHandover,
 	normalizeChecklist,
 	shouldReviewHandover,
@@ -194,6 +196,9 @@ export default function (pi: ExtensionAPI) {
 
 			const result = await ctx.newSession({
 				parentSession: item.parentSession,
+				setup: async (sessionManager) => {
+					sessionManager.appendCustomEntry(HANDOVER_METADATA_ENTRY, createHandoverMetadata(item, new Date().toISOString()));
+				},
 				withSession: async (replacementCtx) => {
 					await replacementCtx.sendUserMessage(nextPrompt);
 				},

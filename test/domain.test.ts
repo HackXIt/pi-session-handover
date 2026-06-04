@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	HANDOVER_PENDING_ENTRY,
 	HANDOVER_RESOLVED_ENTRY,
+	createHandoverMetadata,
 	findPendingHandover,
 	normalizeChecklist,
 	shouldReviewHandover,
@@ -40,6 +41,34 @@ describe("shouldReviewHandover", () => {
 	it("uses config review when no checklist item is blocked", () => {
 		expect(shouldReviewHandover(false, [{ name: "Build", status: "done" }])).toBe(false);
 		expect(shouldReviewHandover(true, [{ name: "Build", status: "done" }])).toBe(true);
+	});
+});
+
+describe("createHandoverMetadata", () => {
+	it("copies durable handover data without the next prompt or review policy", () => {
+		const metadata = createHandoverMetadata(
+			{
+				id: "abc",
+				nextPrompt: "continue",
+				summary: "done",
+				checklist: [{ name: "Build", status: "done" }],
+				parentSession: "/tmp/parent.jsonl",
+				reviewPromptBeforeStart: true,
+				createdAt: "2026-06-04T00:00:00.000Z",
+			},
+			"2026-06-04T00:01:00.000Z",
+		);
+
+		expect(metadata).toEqual({
+			id: "abc",
+			summary: "done",
+			checklist: [{ name: "Build", status: "done" }],
+			parentSession: "/tmp/parent.jsonl",
+			createdAt: "2026-06-04T00:00:00.000Z",
+			receivedAt: "2026-06-04T00:01:00.000Z",
+		});
+		expect(metadata).not.toHaveProperty("nextPrompt");
+		expect(metadata).not.toHaveProperty("reviewPromptBeforeStart");
 	});
 });
 

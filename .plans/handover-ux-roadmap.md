@@ -189,7 +189,7 @@ Implemented in commit `a2babdd` (`Implement structured handover recovery`):
 These are intentionally left for a follow-up slice rather than expanding the first slice:
 
 - The custom review overlay shows prompt preview and launches `ctx.ui.editor()` for prompt edits; it is not yet a fully integrated multi-field modal editor.
-- Pending metadata is persisted/resolved in the parent session. The replacement session currently receives the prompt as the first visible user message and parent session linkage, but does not yet persist all handover metadata into the replacement session.
+- Replacement-session handover metadata was added in follow-up commit: the new session now stores parent session, turn summary, closure checklist, creation time, and receipt time as extension metadata before the first visible user prompt is sent.
 - The existing config merge tests remain in place; no new config-layering work was added because global/session settings layering is a later slice.
 
 ### Suggested implementation steps status
@@ -207,13 +207,14 @@ These are intentionally left for a follow-up slice rather than expanding the fir
 
 ## Current implementation position
 
-The first usability upgrade is complete and pushed. The next recommended work is to choose one of these follow-up slices:
+The first usability upgrade is complete and pushed. The first follow-up slice, replacement-session metadata persistence, is also implemented: `handover-continue` appends `pi-agent-handoff:metadata` in the replacement session setup before sending the visible next prompt.
+
+Remaining recommended follow-up slices:
 
 1. Tighten the review UI into a fully integrated editable modal.
-2. Persist handover metadata into the replacement session after `newSession`.
-3. Implement settings layering.
-4. Implement wizard mode.
-5. Implement automatic handover mode.
+2. Implement settings layering.
+3. Implement wizard mode.
+4. Implement automatic handover mode.
 
 ## Later slices
 
