@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { ExtensionEditorComponent, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { Static } from "@sinclair/typebox";
 import { loadHandoverConfig } from "./config.js";
@@ -37,8 +37,6 @@ const handoverCompleteSchema = Type.Object({
 
 type HandoverCompleteInput = Static<typeof handoverCompleteSchema>;
 
-type ReviewChoice = "accept" | "edit" | "cancel";
-
 function makeId(): string {
 	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -59,12 +57,25 @@ function pendingSummary(item: PendingHandover): string {
 }
 
 async function reviewPendingHandover(ctx: Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1], item: PendingHandover): Promise<string | undefined> {
-	let nextPrompt = item.nextPrompt;
-	while (true) {
-		const choice = await ctx.ui.custom<ReviewChoice>((_tui, theme, _kb, done) => ({
+	return ctx.ui.custom<string | undefined>((tui, theme, keybindings, done) => {
+		const editor = new ExtensionEditorComponent(
+			tui,
+			keybindings,
+			"Edit next-session prompt",
+			item.nextPrompt,
+			(value) => done(value),
+			() => done(undefined),
+		);
+		return {
+			get focused() {
+				return editor.focused;
+			},
+			set focused(value: boolean) {
+				editor.focused = value;
+			},
 			render(width: number) {
 				const bodyWidth = Math.max(20, width - 4);
-				const lines = [
+				const header = [
 					theme.fg("accent", theme.bold("Handover review")),
 					pendingSummary(item),
 					"",
@@ -74,27 +85,19 @@ async function reviewPendingHandover(ctx: Parameters<Parameters<ExtensionAPI["re
 					theme.fg("accent", "Checklist"),
 					...(item.checklist.length > 0 ? item.checklist.map(checklistLine) : ["(none supplied)"]),
 					"",
-					theme.fg("accent", "Next-session prompt preview"),
-					...nextPrompt.split("\n").slice(0, 10),
-					"",
-					theme.fg("dim", "enter accept • e edit prompt • esc/c cancel"),
+					theme.fg("accent", "Next-session prompt"),
 				];
-				return lines.map((line) => truncate(line, bodyWidth));
+				return [...header.map((line) => truncate(line, bodyWidth)), ...editor.render(width)];
 			},
 			handleInput(data: string) {
-				if (data === "\r" || data === "\n") done("accept");
-				if (data.toLowerCase() === "e") done("edit");
-				if (data === "\x1b" || data.toLowerCase() === "c") done("cancel");
+				editor.handleInput(data);
+				tui.requestRender();
 			},
-			invalidate() {},
-		}), { overlay: true, overlayOptions: { width: "80%", maxHeight: "80%", minWidth: 60 } });
-
-		if (choice === "accept") return nextPrompt;
-		if (choice === "cancel") return undefined;
-		const edited = await ctx.ui.editor("Edit handover prompt for the new session", nextPrompt);
-		if (edited === undefined) return undefined;
-		nextPrompt = edited;
-	}
+			invalidate() {
+				editor.invalidate();
+			},
+		};
+	}, { overlay: true, overlayOptions: { width: "80%", maxHeight: "90%", minWidth: 60 } });
 }
 
 export default function (pi: ExtensionAPI) {

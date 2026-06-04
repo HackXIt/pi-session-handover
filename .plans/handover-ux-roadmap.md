@@ -188,7 +188,7 @@ Implemented in commit `a2babdd` (`Implement structured handover recovery`):
 
 These are intentionally left for a follow-up slice rather than expanding the first slice:
 
-- The custom review overlay shows prompt preview and launches `ctx.ui.editor()` for prompt edits; it is not yet a fully integrated multi-field modal editor.
+- The review UI was tightened in a follow-up slice: the custom overlay now embeds an editable next-session prompt editor directly beneath summary and checklist details, instead of launching a separate editor step.
 - Replacement-session handover metadata was added in follow-up commit: the new session now stores parent session, turn summary, closure checklist, creation time, and receipt time as extension metadata before the first visible user prompt is sent.
 - The existing config merge tests remain in place; no new config-layering work was added because global/session settings layering is a later slice.
 
@@ -207,14 +207,16 @@ These are intentionally left for a follow-up slice rather than expanding the fir
 
 ## Current implementation position
 
-The first usability upgrade is complete and pushed. The first follow-up slice, replacement-session metadata persistence, is also implemented: `handover-continue` appends `pi-agent-handoff:metadata` in the replacement session setup before sending the visible next prompt.
+The first usability upgrade is complete and pushed. Two follow-up slices are also implemented:
+
+- Replacement-session metadata persistence: `handover-continue` appends `pi-agent-handoff:metadata` in the replacement session setup before sending the visible next prompt.
+- Integrated review editing: the handover review overlay now embeds the editable next-session prompt directly in the review modal.
 
 Remaining recommended follow-up slices:
 
-1. Tighten the review UI into a fully integrated editable modal.
-2. Implement settings layering.
-3. Implement wizard mode.
-4. Implement automatic handover mode.
+1. Implement settings layering.
+2. Implement wizard mode.
+3. Implement automatic handover mode.
 
 ## Later slices
 
