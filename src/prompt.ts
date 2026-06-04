@@ -1,8 +1,9 @@
 import type { HandoverConfig } from "./config.js";
+import type { AutoHandoverState } from "./domain.js";
 
 export type HandoverPromptContext = Record<string, string>;
 
-export function buildAgentHandoverRequest(description: string, config: HandoverConfig, context: HandoverPromptContext = {}): string {
+export function buildAgentHandoverRequest(description: string, config: HandoverConfig, context: HandoverPromptContext = {}, auto?: AutoHandoverState): string {
 	const steps = config.completionSteps
 		.map((step, index) => `${index + 1}. ${step.name}: ${step.description}`)
 		.join("\n");
@@ -14,8 +15,11 @@ export function buildAgentHandoverRequest(description: string, config: HandoverC
 			.map(([name, value]) => `- ${name}: ${value}`)
 			.join("\n")}`
 		: "";
+	const autoBlock = auto?.armed
+		? `\n\n## Automatic handover mode\n\nThis session is armed for automatic handover chain ${auto.chainId} at depth ${auto.depth}/${auto.maxDepth}. If there is another slice remaining after this turn, prepare the next handover prompt so the chain can continue. Do not exceed the max depth.`
+		: "";
 
-	return `Please write a prompt for a new agent session to continue ${description} and take over from here.${contextBlock}
+	return `Please write a prompt for a new agent session to continue ${description} and take over from here.${contextBlock}${autoBlock}
 
 Before writing that prompt, close your current turn according to these rules:
 

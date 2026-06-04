@@ -73,8 +73,9 @@ Use the same JSON shape for global user config when you want defaults across pro
 ## Commands and tools
 
 - `/handover <description>` — ask the current agent to close and prepare a new-session prompt.
-- `/handover status` — inspect pending handover state and resume/cancel after reload.
-- `/handover cancel` — cancel pending handover state.
+- `/handover auto [maxDepth]` — arm automatic handover carry-forward for this session. If `maxDepth` is omitted, the extension tries to infer it from configured plan/task context, then asks.
+- `/handover status` — inspect pending handover state and armed auto mode, then resume/cancel after reload.
+- `/handover cancel` — cancel pending handover and armed auto state.
 - `/handover-continue <id>` — internal command queued by the tool.
 - `handover_complete` — tool the current agent calls with the final `nextPrompt`, summary, and closure checklist.
 

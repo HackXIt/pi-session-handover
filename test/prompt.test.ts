@@ -25,3 +25,17 @@ it("includes collected wizard context in the continuation request", () => {
 	expect(prompt).toContain("- plan: docs/PLAN.md");
 	expect(prompt).toContain("- risk: migration not verified");
 });
+
+it("includes automatic handover chain instructions", () => {
+	const prompt = buildAgentHandoverRequest("phase 2", defaultConfig, {}, {
+		chainId: "chain",
+		depth: 2,
+		maxDepth: 5,
+		armed: true,
+		createdAt: "now",
+		updatedAt: "now",
+	});
+
+	expect(prompt).toContain("## Automatic handover mode");
+	expect(prompt).toContain("depth 2/5");
+});

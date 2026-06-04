@@ -1,6 +1,7 @@
 export const HANDOVER_PENDING_ENTRY = "pi-agent-handoff:pending";
 export const HANDOVER_RESOLVED_ENTRY = "pi-agent-handoff:resolved";
 export const HANDOVER_METADATA_ENTRY = "pi-agent-handoff:metadata";
+export const HANDOVER_AUTO_STATE_ENTRY = "pi-agent-handoff:auto-state";
 
 export type ChecklistStatus = "done" | "blocked" | "skipped";
 
@@ -22,6 +23,16 @@ export type RawHandoverChecklistItem = string | {
 	evidence?: unknown;
 };
 
+export type AutoHandoverState = {
+	chainId: string;
+	depth: number;
+	maxDepth: number;
+	armed: boolean;
+	createdAt: string;
+	updatedAt: string;
+	source?: string;
+};
+
 export type PendingHandover = {
 	id: string;
 	nextPrompt: string;
@@ -30,6 +41,7 @@ export type PendingHandover = {
 	parentSession?: string;
 	reviewPromptBeforeStart: boolean;
 	createdAt: string;
+	auto?: AutoHandoverState;
 };
 
 export type HandoverMetadata = {
@@ -39,6 +51,7 @@ export type HandoverMetadata = {
 	checklist: HandoverChecklistItem[];
 	createdAt: string;
 	receivedAt: string;
+	auto?: AutoHandoverState;
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -94,7 +107,30 @@ export function createHandoverMetadata(item: PendingHandover, receivedAt: string
 		checklist: item.checklist,
 		createdAt: item.createdAt,
 		receivedAt,
+		...(item.auto ? { auto: item.auto } : {}),
 	};
+}
+
+export function createNextAutoState(auto: AutoHandoverState, updatedAt: string): AutoHandoverState | undefined {
+	const depth = auto.depth + 1;
+	if (!auto.armed || depth > auto.maxDepth) return undefined;
+	return { ...auto, depth, updatedAt };
+}
+
+export function findAutoHandoverState(entries: Array<{ type: string; customType?: string; data?: unknown }>): AutoHandoverState | undefined {
+	for (let index = entries.length - 1; index >= 0; index--) {
+		const entry = entries[index];
+		if (entry?.type === "custom" && entry.customType === HANDOVER_AUTO_STATE_ENTRY && isAutoHandoverState(entry.data)) {
+			return entry.data.armed ? entry.data : undefined;
+		}
+	}
+	return undefined;
+}
+
+export function inferMaxDepthFromPlanText(text: string): number | undefined {
+	const lines = text.split("\n");
+	const taskLines = lines.filter((line) => /^\s*(?:[-*]\s+\[[ xX-]\]|(?:\d+\.)\s+|#{2,}\s+(?:phase|slice|task)\b)/i.test(line));
+	return taskLines.length > 0 ? taskLines.length : undefined;
 }
 
 export function findPendingHandover(entries: Array<{ type: string; customType?: string; data?: unknown }>): PendingHandover | undefined {
@@ -111,6 +147,22 @@ export function findPendingHandover(entries: Array<{ type: string; customType?: 
 	return Array.from(pending.values()).at(-1);
 }
 
+function isAutoHandoverState(value: unknown): value is AutoHandoverState {
+	return (
+		isObject(value) &&
+		typeof value.chainId === "string" &&
+		typeof value.depth === "number" &&
+		Number.isInteger(value.depth) &&
+		value.depth > 0 &&
+		typeof value.maxDepth === "number" &&
+		Number.isInteger(value.maxDepth) &&
+		value.maxDepth > 0 &&
+		typeof value.armed === "boolean" &&
+		typeof value.createdAt === "string" &&
+		typeof value.updatedAt === "string"
+	);
+}
+
 function isPendingHandover(value: unknown): value is PendingHandover {
 	return (
 		isObject(value) &&
@@ -118,6 +170,7 @@ function isPendingHandover(value: unknown): value is PendingHandover {
 		typeof value.nextPrompt === "string" &&
 		Array.isArray(value.checklist) &&
 		typeof value.reviewPromptBeforeStart === "boolean" &&
-		typeof value.createdAt === "string"
+		typeof value.createdAt === "string" &&
+		(value.auto === undefined || isAutoHandoverState(value.auto))
 	);
 }

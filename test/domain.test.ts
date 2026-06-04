@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+	HANDOVER_AUTO_STATE_ENTRY,
 	HANDOVER_PENDING_ENTRY,
 	HANDOVER_RESOLVED_ENTRY,
 	createHandoverMetadata,
+	createNextAutoState,
+	findAutoHandoverState,
 	findPendingHandover,
+	inferMaxDepthFromPlanText,
 	normalizeChecklist,
 	shouldReviewHandover,
 } from "../src/domain.js";
@@ -69,6 +73,31 @@ describe("createHandoverMetadata", () => {
 		});
 		expect(metadata).not.toHaveProperty("nextPrompt");
 		expect(metadata).not.toHaveProperty("reviewPromptBeforeStart");
+	});
+});
+
+describe("auto handover helpers", () => {
+	const auto = {
+		chainId: "chain",
+		depth: 1,
+		maxDepth: 2,
+		armed: true,
+		createdAt: "2026-06-04T00:00:00.000Z",
+		updatedAt: "2026-06-04T00:00:00.000Z",
+	};
+
+	it("finds the latest armed auto state", () => {
+		expect(findAutoHandoverState([{ type: "custom", customType: HANDOVER_AUTO_STATE_ENTRY, data: auto }])).toEqual(auto);
+		expect(findAutoHandoverState([{ type: "custom", customType: HANDOVER_AUTO_STATE_ENTRY, data: { ...auto, armed: false } }])).toBeUndefined();
+	});
+
+	it("increments auto depth until max depth", () => {
+		expect(createNextAutoState(auto, "later")?.depth).toBe(2);
+		expect(createNextAutoState({ ...auto, depth: 2 }, "later")).toBeUndefined();
+	});
+
+	it("infers max depth from checklist, numbered, and phase headings", () => {
+		expect(inferMaxDepthFromPlanText("- [ ] one\n- [x] two\n## Phase three")).toBe(3);
 	});
 });
 

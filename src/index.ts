@@ -1,15 +1,22 @@
+import { readFile } from "node:fs/promises";
+import { isAbsolute, join } from "node:path";
 import { ExtensionEditorComponent, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { Static } from "@sinclair/typebox";
 import { loadHandoverConfig } from "./config.js";
 import {
+	HANDOVER_AUTO_STATE_ENTRY,
 	HANDOVER_METADATA_ENTRY,
 	HANDOVER_PENDING_ENTRY,
 	HANDOVER_RESOLVED_ENTRY,
 	createHandoverMetadata,
+	createNextAutoState,
+	findAutoHandoverState,
 	findPendingHandover,
+	inferMaxDepthFromPlanText,
 	normalizeChecklist,
 	shouldReviewHandover,
+	type AutoHandoverState,
 	type PendingHandover,
 } from "./domain.js";
 import { buildAgentHandoverRequest, type HandoverPromptContext } from "./prompt.js";
@@ -54,6 +61,46 @@ function checklistLine(item: PendingHandover["checklist"][number]): string {
 function pendingSummary(item: PendingHandover): string {
 	const blocked = item.checklist.filter((step) => step.status === "blocked").length;
 	return `Pending handover ${item.id}: ${item.checklist.length} checklist item(s), ${blocked} blocked.`;
+}
+
+function autoSummary(auto: AutoHandoverState): string {
+	return `Auto handover armed (${auto.depth}/${auto.maxDepth})${auto.source ? ` from ${auto.source}` : ""}.`;
+}
+
+function parseAutoDepth(args: string): number | undefined {
+	const value = args.trim();
+	if (!value) return undefined;
+	const depth = Number(value);
+	return Number.isInteger(depth) && depth > 0 ? depth : undefined;
+}
+
+async function inferAutoDepth(
+	ctx: Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1],
+	config: { promptContextFields: Array<{ name: string; prompt: string }> },
+): Promise<{ maxDepth: number; source?: string } | undefined> {
+	const sourceField = config.promptContextFields.find((field) => /plan|task|issue|source/i.test(field.name));
+	if (sourceField) {
+		const source = await ctx.ui.input(sourceField.prompt, "docs/PLAN.md");
+		if (source === undefined) return undefined;
+		const trimmed = source.trim();
+		if (trimmed) {
+			try {
+				const path = isAbsolute(trimmed) ? trimmed : join(ctx.cwd, trimmed);
+				const inferred = inferMaxDepthFromPlanText(await readFile(path, "utf8"));
+				if (inferred) return { maxDepth: inferred, source: trimmed };
+			} catch {
+				// Fall back to asking explicitly below.
+			}
+		}
+	}
+	const input = await ctx.ui.input("Maximum automatic handover chain depth?", "5");
+	if (input === undefined) return undefined;
+	const maxDepth = parseAutoDepth(input);
+	if (!maxDepth) {
+		ctx.ui.notify("Auto handover max depth must be a positive integer", "error");
+		return undefined;
+	}
+	return { maxDepth };
 }
 
 async function collectPromptContext(
@@ -120,10 +167,13 @@ async function reviewPendingHandover(ctx: Parameters<Parameters<ExtensionAPI["re
 
 export default function (pi: ExtensionAPI) {
 	const pending = new Map<string, PendingHandover>();
+	let autoState: AutoHandoverState | undefined;
 
 	function rememberFromEntries(ctx: { sessionManager: { getEntries(): Array<{ type: string; customType?: string; data?: unknown }> } }) {
-		const item = findPendingHandover(ctx.sessionManager.getEntries());
+		const entries = ctx.sessionManager.getEntries();
+		const item = findPendingHandover(entries);
 		if (item) pending.set(item.id, item);
+		autoState = findAutoHandoverState(entries);
 		return item;
 	}
 
@@ -132,43 +182,88 @@ export default function (pi: ExtensionAPI) {
 		return id ? pending.get(id) : fromEntries ?? Array.from(pending.values()).at(-1);
 	}
 
+	function getAuto(ctx: { sessionManager: { getEntries(): Array<{ type: string; customType?: string; data?: unknown }> } }) {
+		rememberFromEntries(ctx);
+		return autoState;
+	}
+
 	pi.on("session_start", async (_event, ctx) => {
 		const item = rememberFromEntries(ctx);
 		if (item) ctx.ui.notify(`${pendingSummary(item)} Run /handover status to resume or cancel.`, "warning");
+		if (autoState) ctx.ui.setStatus("pi-agent-handoff", `handover auto ${autoState.depth}/${autoState.maxDepth}`);
 	});
 
 	pi.registerCommand("handover", {
 		description: "Close this turn and hand over to a fresh pi session",
 		handler: async (args, ctx) => {
 			const subcommand = args.trim();
-			if (subcommand === "status") {
-				const item = getPending(ctx);
-				if (!item) {
-					ctx.ui.notify("No pending handover", "info");
+			const config = await loadHandoverConfig(ctx.cwd, { entries: ctx.sessionManager.getEntries() });
+			if (subcommand.startsWith("auto")) {
+				const explicitDepth = parseAutoDepth(subcommand.slice("auto".length));
+				const inferred = explicitDepth ? { maxDepth: explicitDepth } : await inferAutoDepth(ctx, config);
+				if (!inferred) {
+					ctx.ui.notify("Auto handover cancelled", "info");
 					return;
 				}
-				const action = await ctx.ui.select(`${pendingSummary(item)} What now?`, ["Resume", "Cancel", "Dismiss"]);
-				if (action === "Resume") pi.sendUserMessage(`/handover-continue ${item.id}`);
+				const now = new Date().toISOString();
+				autoState = {
+					chainId: makeId(),
+					depth: 1,
+					maxDepth: inferred.maxDepth,
+					armed: true,
+					createdAt: now,
+					updatedAt: now,
+					...(inferred.source ? { source: inferred.source } : {}),
+				};
+				pi.appendEntry(HANDOVER_AUTO_STATE_ENTRY, autoState);
+				ctx.ui.setStatus("pi-agent-handoff", `handover auto ${autoState.depth}/${autoState.maxDepth}`);
+				ctx.ui.notify(autoSummary(autoState), "info");
+				return;
+			}
+			if (subcommand === "status") {
+				const item = getPending(ctx);
+				const auto = getAuto(ctx);
+				if (!item && !auto) {
+					ctx.ui.notify("No pending or armed handover", "info");
+					return;
+				}
+				const summary = [item ? pendingSummary(item) : undefined, auto ? autoSummary(auto) : undefined].filter(Boolean).join(" ");
+				const action = await ctx.ui.select(`${summary} What now?`, item ? ["Resume", "Cancel", "Dismiss"] : ["Cancel", "Dismiss"]);
+				if (item && action === "Resume") pi.sendUserMessage(`/handover-continue ${item.id}`);
 				if (action === "Cancel") {
-					pending.delete(item.id);
-					pi.appendEntry(HANDOVER_RESOLVED_ENTRY, { id: item.id, reason: "cancelled", at: new Date().toISOString() });
-					ctx.ui.notify("Pending handover cancelled", "info");
+					if (item) {
+						pending.delete(item.id);
+						pi.appendEntry(HANDOVER_RESOLVED_ENTRY, { id: item.id, reason: "cancelled", at: new Date().toISOString() });
+					}
+					if (auto) {
+						autoState = { ...auto, armed: false, updatedAt: new Date().toISOString() };
+						pi.appendEntry(HANDOVER_AUTO_STATE_ENTRY, autoState);
+						ctx.ui.setStatus("pi-agent-handoff", undefined);
+					}
+					ctx.ui.notify("Handover state cancelled", "info");
 				}
 				return;
 			}
 			if (subcommand === "cancel") {
 				const item = getPending(ctx);
-				if (!item) {
-					ctx.ui.notify("No pending handover", "info");
+				const auto = getAuto(ctx);
+				if (!item && !auto) {
+					ctx.ui.notify("No pending or armed handover", "info");
 					return;
 				}
-				pending.delete(item.id);
-				pi.appendEntry(HANDOVER_RESOLVED_ENTRY, { id: item.id, reason: "cancelled", at: new Date().toISOString() });
-				ctx.ui.notify("Pending handover cancelled", "info");
+				if (item) {
+					pending.delete(item.id);
+					pi.appendEntry(HANDOVER_RESOLVED_ENTRY, { id: item.id, reason: "cancelled", at: new Date().toISOString() });
+				}
+				if (auto) {
+					autoState = { ...auto, armed: false, updatedAt: new Date().toISOString() };
+					pi.appendEntry(HANDOVER_AUTO_STATE_ENTRY, autoState);
+					ctx.ui.setStatus("pi-agent-handoff", undefined);
+				}
+				ctx.ui.notify("Handover state cancelled", "info");
 				return;
 			}
 
-			const config = await loadHandoverConfig(ctx.cwd, { entries: ctx.sessionManager.getEntries() });
 			let description = subcommand;
 
 			if (!description && config.taskInputRequired) {
@@ -193,7 +288,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const request = buildAgentHandoverRequest(description, config, context);
+			const request = buildAgentHandoverRequest(description, config, context, getAuto(ctx));
 			pi.sendUserMessage(request, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
 		},
 	});
@@ -224,7 +319,10 @@ export default function (pi: ExtensionAPI) {
 			const result = await ctx.newSession({
 				parentSession: item.parentSession,
 				setup: async (sessionManager) => {
-					sessionManager.appendCustomEntry(HANDOVER_METADATA_ENTRY, createHandoverMetadata(item, new Date().toISOString()));
+					const now = new Date().toISOString();
+					sessionManager.appendCustomEntry(HANDOVER_METADATA_ENTRY, createHandoverMetadata(item, now));
+					const nextAuto = item.auto ? createNextAutoState(item.auto, now) : undefined;
+					if (nextAuto) sessionManager.appendCustomEntry(HANDOVER_AUTO_STATE_ENTRY, nextAuto);
 				},
 				withSession: async (replacementCtx) => {
 					await replacementCtx.sendUserMessage(nextPrompt);
@@ -261,6 +359,7 @@ export default function (pi: ExtensionAPI) {
 				parentSession: ctx.sessionManager.getSessionFile(),
 				reviewPromptBeforeStart: shouldReviewHandover(config.reviewPromptBeforeStart, checklist),
 				createdAt: new Date().toISOString(),
+				...(getAuto(ctx) ? { auto: getAuto(ctx) } : {}),
 			};
 			pending.set(id, item);
 			pi.appendEntry(HANDOVER_PENDING_ENTRY, item);

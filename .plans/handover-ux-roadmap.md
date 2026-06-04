@@ -207,16 +207,15 @@ These are intentionally left for a follow-up slice rather than expanding the fir
 
 ## Current implementation position
 
-The first usability upgrade is complete and pushed. Four follow-up slices are also implemented:
+The first usability upgrade and all planned follow-up slices are complete and pushed:
 
 - Replacement-session metadata persistence: `handover-continue` appends `pi-agent-handoff:metadata` in the replacement session setup before sending the visible next prompt.
 - Integrated review editing: the handover review overlay now embeds the editable next-session prompt directly in the review modal.
 - Settings layering: configuration now resolves in built-in → global user file → project file/markdown → session metadata order. Global config lives at `${getAgentDir()}/extensions/pi-agent-handoff.json`; session overrides are metadata-only for orchestrator/task-specific command support, not a generic user-facing config mutation command.
 - Wizard/context fields: config can define `promptContextFields`; `/handover` collects those required fields before constructing the agent handover request and includes them in a dedicated context section.
+- Automatic handover mode: `/handover auto [maxDepth]` arms a bounded chain, persists chain id/depth/max depth, carries armed state into replacement sessions, shows footer status, and includes chain budget instructions in the agent handover request.
 
-Remaining recommended follow-up slice:
-
-1. Implement automatic handover mode.
+Remaining work is product hardening rather than the original roadmap slices.
 
 ## Later slices
 
@@ -248,11 +247,18 @@ Deferred:
 
 ### Auto mode
 
-- Implement `/handover auto`.
-- Persist chain id/depth/max depth into session metadata.
-- Add subtle status footer/widget.
-- Include remaining chain budget in agent instructions.
-- Add tool/API for agent-operated handover condition checkbox.
+Implemented:
+
+- [x] Implement `/handover auto [maxDepth]`.
+- [x] Infer max depth from configured plan/task context when possible; otherwise ask.
+- [x] Persist chain id/depth/max depth into session metadata.
+- [x] Carry armed auto state into replacement sessions and increment depth until max depth.
+- [x] Add subtle footer status (`handover auto depth/maxDepth`).
+- [x] Include remaining chain budget in agent instructions.
+
+Deferred:
+
+- [ ] Add a richer agent-operated handover condition checkbox/tool beyond the existing `handover_complete` flow.
 
 ### Orchestrator support
 
