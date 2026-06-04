@@ -7,6 +7,13 @@ export type HandoverStep = {
 	description: string;
 };
 
+export type HandoverPromptField = {
+	name: string;
+	label: string;
+	prompt: string;
+	multiline: boolean;
+};
+
 export const HANDOVER_SESSION_CONFIG_ENTRY = "pi-agent-handoff:session-config";
 
 export type HandoverConfig = {
@@ -17,6 +24,7 @@ export type HandoverConfig = {
 	taskInputRequired: boolean;
 	reviewPromptBeforeStart: boolean;
 	completionSteps: HandoverStep[];
+	promptContextFields: HandoverPromptField[];
 	projectRules?: string;
 };
 
@@ -37,6 +45,7 @@ export const defaultConfig: HandoverConfig = {
 	taskInputRequired: true,
 	reviewPromptBeforeStart: true,
 	completionSteps: DEFAULT_STEPS,
+	promptContextFields: [],
 };
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -49,6 +58,21 @@ type LoadHandoverConfigOptions = {
 	entries?: EntryLike[];
 	globalConfigPath?: string;
 };
+
+function parsePromptFields(value: unknown): HandoverPromptField[] | undefined {
+	if (!Array.isArray(value)) return undefined;
+	const fields = value
+		.map((item) => {
+			if (!isObject(item) || typeof item.name !== "string") return undefined;
+			const name = item.name.trim();
+			if (!name) return undefined;
+			const label = typeof item.label === "string" && item.label.trim() ? item.label.trim() : name;
+			const prompt = typeof item.prompt === "string" && item.prompt.trim() ? item.prompt.trim() : label;
+			return { name, label, prompt, multiline: typeof item.multiline === "boolean" ? item.multiline : false };
+		})
+		.filter((field): field is HandoverPromptField => field !== undefined);
+	return fields.length > 0 ? fields : undefined;
+}
 
 function parseSteps(value: unknown): HandoverStep[] | undefined {
 	if (!Array.isArray(value)) return undefined;
@@ -78,6 +102,7 @@ export function mergeConfig(base: HandoverConfig, override: unknown): HandoverCo
 				? override.reviewPromptBeforeStart
 				: base.reviewPromptBeforeStart,
 		completionSteps: parseSteps(override.completionSteps) ?? base.completionSteps,
+		promptContextFields: parsePromptFields(override.promptContextFields) ?? base.promptContextFields,
 		projectRules: typeof override.projectRules === "string" ? override.projectRules : base.projectRules,
 	};
 }

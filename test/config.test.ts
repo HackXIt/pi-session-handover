@@ -34,6 +34,21 @@ it("ignores invalid completion steps", () => {
 	expect(config.completionSteps).toEqual(defaultConfig.completionSteps);
 });
 
+it("merges prompt context fields for wizard mode", () => {
+	const config = mergeConfig(defaultConfig, {
+		promptContextFields: [
+			{ name: "plan", label: "Plan file", prompt: "Which plan file?", multiline: false },
+			{ name: "risks" },
+			{ label: "invalid" },
+		],
+	});
+
+	expect(config.promptContextFields).toEqual([
+		{ name: "plan", label: "Plan file", prompt: "Which plan file?", multiline: false },
+		{ name: "risks", label: "risks", prompt: "risks", multiline: false },
+	]);
+});
+
 it("layers built-ins, global config, project config, markdown rules, and session overrides", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "handover-config-"));
 	const globalPath = join(dir, "global.json");

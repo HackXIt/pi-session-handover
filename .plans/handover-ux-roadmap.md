@@ -207,16 +207,16 @@ These are intentionally left for a follow-up slice rather than expanding the fir
 
 ## Current implementation position
 
-The first usability upgrade is complete and pushed. Three follow-up slices are also implemented:
+The first usability upgrade is complete and pushed. Four follow-up slices are also implemented:
 
 - Replacement-session metadata persistence: `handover-continue` appends `pi-agent-handoff:metadata` in the replacement session setup before sending the visible next prompt.
 - Integrated review editing: the handover review overlay now embeds the editable next-session prompt directly in the review modal.
 - Settings layering: configuration now resolves in built-in → global user file → project file/markdown → session metadata order. Global config lives at `${getAgentDir()}/extensions/pi-agent-handoff.json`; session overrides are metadata-only for orchestrator/task-specific command support, not a generic user-facing config mutation command.
+- Wizard/context fields: config can define `promptContextFields`; `/handover` collects those required fields before constructing the agent handover request and includes them in a dedicated context section.
 
-Remaining recommended follow-up slices:
+Remaining recommended follow-up slice:
 
-1. Implement wizard mode.
-2. Implement automatic handover mode.
+1. Implement automatic handover mode.
 
 ## Later slices
 
@@ -235,9 +235,16 @@ Documentation:
 
 ### Wizard mode
 
-- Implement missing-required-field collection.
-- Reuse pi TUI interaction patterns similar to questionnaire-style flows.
-- Keep wizard out of the default path unless configured.
+Implemented:
+
+- [x] Add configurable `promptContextFields` for required handover context.
+- [x] Collect configured fields only when present, keeping wizard behavior out of the default path.
+- [x] Include collected fields in the agent handover request under `## Handover context`.
+- [x] Document field configuration in README.
+
+Deferred:
+
+- [ ] Rich multi-field form UI; current implementation uses existing input/editor dialogs per field.
 
 ### Auto mode
 

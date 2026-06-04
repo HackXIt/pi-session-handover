@@ -44,6 +44,10 @@ Create `.pi/handover.json` to configure project behavior:
   "reviewPromptBeforeStart": true,
   "agentInstructions": "Close this turn according to the project rules before handing over.",
   "nextPromptInstructions": "Write a self-contained prompt with context, files, verification, risks, and exact next steps.",
+  "promptContextFields": [
+    { "name": "plan", "label": "Plan file", "prompt": "Which plan or issue should the next agent follow?" },
+    { "name": "risk", "label": "Known risk", "prompt": "What risk should the next agent keep in mind?", "multiline": true }
+  ],
   "completionSteps": [
     { "name": "Build", "description": "Run a successful build or test suite." },
     { "name": "Commit", "description": "Create the configured commit or changelist." },
@@ -54,6 +58,8 @@ Create `.pi/handover.json` to configure project behavior:
 ```
 
 Create `.pi/handover.md` for longer project-specific rules. Its contents are appended to the handover instruction sent to the current agent.
+
+`promptContextFields` is optional. When configured, `/handover` asks only for those missing required context fields before it sends the handover instruction to the current agent.
 
 Use the same JSON shape for global user config when you want defaults across projects. Keep global config minimal, for example:
 

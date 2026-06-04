@@ -14,3 +14,14 @@ it("builds the exact continuation request with closure rules", () => {
 	expect(prompt).toContain("status (done, blocked, or skipped)");
 	expect(prompt).toContain("Push to origin before handover.");
 });
+
+it("includes collected wizard context in the continuation request", () => {
+	const prompt = buildAgentHandoverRequest("phase 2", defaultConfig, {
+		plan: "docs/PLAN.md",
+		risk: "migration not verified",
+	});
+
+	expect(prompt).toContain("## Handover context");
+	expect(prompt).toContain("- plan: docs/PLAN.md");
+	expect(prompt).toContain("- risk: migration not verified");
+});

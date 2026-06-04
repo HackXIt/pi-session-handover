@@ -12,7 +12,7 @@ import {
 	shouldReviewHandover,
 	type PendingHandover,
 } from "./domain.js";
-import { buildAgentHandoverRequest } from "./prompt.js";
+import { buildAgentHandoverRequest, type HandoverPromptContext } from "./prompt.js";
 
 const checklistItemSchema = Type.Union([
 	Type.String(),
@@ -54,6 +54,24 @@ function checklistLine(item: PendingHandover["checklist"][number]): string {
 function pendingSummary(item: PendingHandover): string {
 	const blocked = item.checklist.filter((step) => step.status === "blocked").length;
 	return `Pending handover ${item.id}: ${item.checklist.length} checklist item(s), ${blocked} blocked.`;
+}
+
+async function collectPromptContext(
+	ctx: Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1],
+	config: { promptContextFields: Array<{ name: string; prompt: string; multiline: boolean }> },
+): Promise<HandoverPromptContext | undefined> {
+	const context: HandoverPromptContext = {};
+	for (const field of config.promptContextFields) {
+		const value = field.multiline ? await ctx.ui.editor(field.prompt, "") : await ctx.ui.input(field.prompt, "");
+		if (value === undefined) return undefined;
+		const trimmed = value.trim();
+		if (!trimmed) {
+			ctx.ui.notify(`Handover field ${field.name} is required`, "error");
+			return undefined;
+		}
+		context[field.name] = trimmed;
+	}
+	return context;
 }
 
 async function reviewPendingHandover(ctx: Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1], item: PendingHandover): Promise<string | undefined> {
@@ -169,7 +187,13 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const request = buildAgentHandoverRequest(description, config);
+			const context = await collectPromptContext(ctx, config);
+			if (context === undefined) {
+				ctx.ui.notify("Handover cancelled", "info");
+				return;
+			}
+
+			const request = buildAgentHandoverRequest(description, config, context);
 			pi.sendUserMessage(request, ctx.isIdle() ? undefined : { deliverAs: "followUp" });
 		},
 	});
