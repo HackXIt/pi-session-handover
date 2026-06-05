@@ -59,11 +59,13 @@ it("merges prompt context fields for wizard mode", () => {
 	]);
 });
 
-it("layers built-ins, legacy global config, global config, project config, markdown rules, and session overrides", async () => {
+it("layers built-ins, legacy global config, mistaken global config, global config, project config, markdown rules, and session overrides", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "handover-config-"));
 	const legacyGlobalPath = join(dir, "legacy-global.json");
+	const mistakenGlobalPath = join(dir, "mistaken-global.json");
 	const globalPath = join(dir, "global.json");
 	await writeFile(legacyGlobalPath, JSON.stringify({ reviewPromptBeforeStart: false, taskInputPrompt: "Legacy global task?" }));
+	await writeFile(mistakenGlobalPath, JSON.stringify({ taskInputPrompt: "Mistaken global task?", taskInputMultiline: true }));
 	await writeFile(globalPath, JSON.stringify({ taskInputPrompt: "Global task?" }));
 	await mkdir(join(dir, ".pi"));
 	await writeFile(join(dir, ".pi", "handover.json"), JSON.stringify({ taskInputPrompt: "Project task?", taskInputMultiline: true }));
@@ -71,6 +73,7 @@ it("layers built-ins, legacy global config, global config, project config, markd
 
 	const config = await loadHandoverConfig(dir, {
 		legacyGlobalConfigPath: legacyGlobalPath,
+		mistakenGlobalConfigPath: mistakenGlobalPath,
 		globalConfigPath: globalPath,
 		entries: [
 			{
@@ -88,6 +91,6 @@ it("layers built-ins, legacy global config, global config, project config, markd
 	expect(config.projectRules).toBe("Project rules win.");
 });
 
-it("uses the session-handover global config path", () => {
-	expect(getGlobalHandoverConfigPath()).toMatch(/session-handover\.json$/);
+it("uses the pi-session-handover global config path", () => {
+	expect(getGlobalHandoverConfigPath()).toMatch(/pi-session-handover\.json$/);
 });

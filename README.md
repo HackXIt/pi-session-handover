@@ -1,4 +1,4 @@
-# session-handover
+# pi-session-handover
 
 Pi package that adds `/handover` for plan-driven agent handoffs.
 
@@ -9,13 +9,13 @@ Pi package that adds `/handover` for plan-driven agent handoffs.
 Install a pinned release from git:
 
 ```bash
-pi install git:github.com/HackXIt/session-handover@v0.1.0
+pi install git:github.com/HackXIt/pi-session-handover@v0.1.0
 ```
 
 Or install from the homelab GitLab npm Package Registry after a tagged release has been published:
 
 ```bash
-pi install npm:@hackxit/session-handover@0.1.0
+pi install npm:@hackxit/pi-session-handover@0.1.0
 ```
 
 Or test from a checkout:
@@ -38,7 +38,7 @@ If no argument is supplied, the extension prompts for what the next agent should
 Configuration is resolved in this order:
 
 1. Built-in defaults.
-2. Global user config at `~/.pi/agent/extensions/session-handover.json` (`pi-agent-handoff.json` is still read as a legacy fallback).
+2. Global user config at `~/.pi/agent/extensions/pi-session-handover.json` (`session-handover.json` and `pi-agent-handoff.json` are still read as legacy fallbacks).
 3. Project config in `.pi/handover.json` plus `.pi/handover.md`.
 4. Session metadata overrides used by task-specific commands and orchestrators.
 

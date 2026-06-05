@@ -17,7 +17,7 @@ export default function (pi: ExtensionAPI) {
 		const item = state.rememberFromEntries(ctx);
 		const auto = state.getAuto(ctx);
 		if (item) ctx.ui.notify(`${pendingSummary(item)} Run /handover status to resume or cancel.`, "warning");
-		ctx.ui.setStatus("session-handover", auto ? `handover auto ${auto.depth}/${auto.maxDepth}` : undefined);
+		ctx.ui.setStatus("pi-session-handover", auto ? `handover auto ${auto.depth}/${auto.maxDepth}` : undefined);
 	});
 
 	registerHandoverCommands(pi, state, makeId);

@@ -182,7 +182,7 @@ describe("handover extension flows", () => {
 
 		const autoEntry = ctx.sessionManager.getEntries().find((entry) => entry.customType === HANDOVER_AUTO_STATE_ENTRY);
 		expect(autoEntry?.data).toMatchObject({ depth: 1, maxDepth: 4, armed: true });
-		expect(ctx.statuses.at(-1)).toEqual({ key: "session-handover", value: "handover auto 1/4" });
+		expect(ctx.statuses.at(-1)).toEqual({ key: "pi-session-handover", value: "handover auto 1/4" });
 		expect(ctx.notifications.at(-1)?.message).toContain("Auto handover armed (1/4)");
 	});
 
@@ -304,7 +304,7 @@ describe("handover extension flows", () => {
 		expect(sessionStartHandler).toBeDefined();
 		await sessionStartHandler?.({}, secondCtx);
 
-		expect(secondCtx.statuses.at(-1)).toEqual({ key: "session-handover", value: undefined });
+		expect(secondCtx.statuses.at(-1)).toEqual({ key: "pi-session-handover", value: undefined });
 	});
 
 	it("cancels current-session pending and automatic state", async () => {
@@ -330,7 +330,7 @@ describe("handover extension flows", () => {
 		expect(entries.find((entry) => entry.customType === HANDOVER_RESOLVED_ENTRY)?.data).toMatchObject({ id: item.id, reason: "cancelled" });
 		expect(entries.at(-1)?.customType).toBe(HANDOVER_AUTO_STATE_ENTRY);
 		expect(entries.at(-1)?.data).toMatchObject({ chainId: "chain", armed: false });
-		expect(ctx.statuses.at(-1)).toEqual({ key: "session-handover", value: undefined });
+		expect(ctx.statuses.at(-1)).toEqual({ key: "pi-session-handover", value: undefined });
 		expect(ctx.notifications.at(-1)).toEqual({ message: "Handover state cancelled", level: "info" });
 	});
 
@@ -354,7 +354,7 @@ describe("handover extension flows", () => {
 		expect(ctx.ui.select).toHaveBeenCalledWith(expect.stringContaining("Auto handover armed (2/4)"), ["Cancel", "Dismiss"]);
 		expect(entries.at(-1)?.customType).toBe(HANDOVER_AUTO_STATE_ENTRY);
 		expect(entries.at(-1)?.data).toMatchObject({ chainId: "chain", armed: false });
-		expect(ctx.statuses.at(-1)).toEqual({ key: "session-handover", value: undefined });
+		expect(ctx.statuses.at(-1)).toEqual({ key: "pi-session-handover", value: undefined });
 	});
 
 	it("handover_complete persists pending state and queues continuation", async () => {

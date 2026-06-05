@@ -62,6 +62,7 @@ type LoadHandoverConfigOptions = {
 	entries?: EntryLike[];
 	globalConfigPath?: string;
 	legacyGlobalConfigPath?: string;
+	mistakenGlobalConfigPath?: string;
 };
 
 function parsePromptFields(value: unknown): HandoverPromptField[] | undefined {
@@ -140,16 +141,21 @@ async function mergeJsonFile(config: HandoverConfig, path: string): Promise<Hand
 }
 
 export function getGlobalHandoverConfigPath(): string {
-	return join(getAgentDir(), "extensions", "session-handover.json");
+	return join(getAgentDir(), "extensions", "pi-session-handover.json");
 }
 
 export function getLegacyGlobalHandoverConfigPath(): string {
 	return join(getAgentDir(), "extensions", "pi-agent-handoff.json");
 }
 
+export function getMistakenGlobalHandoverConfigPath(): string {
+	return join(getAgentDir(), "extensions", "session-handover.json");
+}
+
 export async function loadHandoverConfig(cwd: string, options: LoadHandoverConfigOptions = {}): Promise<HandoverConfig> {
 	let config = defaultConfig;
 	config = await mergeJsonFile(config, options.legacyGlobalConfigPath ?? getLegacyGlobalHandoverConfigPath());
+	config = await mergeJsonFile(config, options.mistakenGlobalConfigPath ?? getMistakenGlobalHandoverConfigPath());
 	config = await mergeJsonFile(config, options.globalConfigPath ?? getGlobalHandoverConfigPath());
 	config = await mergeJsonFile(config, join(cwd, ".pi", "handover.json"));
 	try {
