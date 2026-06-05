@@ -1,5 +1,7 @@
 # Settings UI plan
 
+Status: Complete. Implemented across slices 1–6 and verified with `npm run ci`.
+
 ## Goal
 
 Add a first-class `/handover settings` UI for editing `pi-session-handover` configuration inside pi-coding-agent.
@@ -60,6 +62,16 @@ Conclusion: start from `SettingsList` for scalar fields and reuse the questionna
 - Global tab does not expose markdown rules unless a future global markdown path is added.
 
 ## Proposed implementation slices
+
+All planned slices are complete:
+
+- Slice 1 — Config IO model: complete.
+- Slice 2 — Settings schema/view model: complete.
+- Slice 3 — `/handover settings` command shell: complete.
+- Slice 4 — Tabbed scalar editor: complete.
+- Slice 5 — Structured list editors: complete.
+- Slice 6 — Project rules editor: complete.
+
 
 ### Slice 1 — Config IO model
 

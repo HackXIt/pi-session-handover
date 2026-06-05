@@ -33,7 +33,17 @@ npm exec -- pi --extension ./src/index.ts
 
 If no argument is supplied, the extension prompts for what the next agent should continue.
 
+Open the interactive settings UI with:
+
+```text
+/handover settings
+```
+
+The settings UI has Global and Project tabs. Confirmed edits autosave immediately to the selected target.
+
 ## Configuration
+
+You can edit configuration from inside Pi with `/handover settings`, or by editing the files below directly.
 
 Configuration is resolved in this order:
 
@@ -66,9 +76,9 @@ Create `.pi/handover.json` to configure project behavior:
 }
 ```
 
-Create `.pi/handover.md` for longer project-specific rules. Its contents are appended to the handover instruction sent to the current agent.
+Create `.pi/handover.md` for longer project-specific rules. Its contents are appended to the handover instruction sent to the current agent. In `/handover settings`, this appears on the Project tab as “Project handover rules”; saving an empty editor value leaves an empty `.pi/handover.md` file.
 
-`promptContextFields` is optional. When configured, `/handover` prompts for each field before it sends the handover instruction to the current agent. Fields are required by default; set `"required": false` to allow blanks. Set a non-empty `"default"` to prefill the input/editor and use that value when the field is left blank.
+`promptContextFields` is optional. When configured, `/handover` prompts for each field before it sends the handover instruction to the current agent. Fields are required by default; set `"required": false` to allow blanks. Set a non-empty `"default"` to prefill the input/editor and use that value when the field is left blank. The settings UI provides structured add/edit/delete/reorder forms for both `promptContextFields` and `completionSteps`.
 
 `reviewPromptBeforeStart` controls manual handovers. It also forces review when a closure checklist item is blocked. `autoReviewPromptBeforeStart` controls automatic handover chains separately and defaults to `false`, so auto mode continues without showing the prompt-review modal unless the project explicitly opts in.
 
@@ -84,6 +94,7 @@ Use the same JSON shape for global user config when you want defaults across pro
 ## Commands and tools
 
 - `/handover <description>` — ask the current agent to close and prepare a new-session prompt.
+- `/handover settings` — open the Global/Project settings editor for JSON settings and project markdown handover rules.
 - `/handover auto [maxDepth]` — arm bounded automatic handover carry-forward for this session. This is not an independent trigger system: the current agent still completes work and calls `handover_complete`, and the extension carries auto metadata into replacement sessions until `maxDepth` is reached. If `maxDepth` is omitted, the extension tries to infer it from configured plan/task context, then asks.
 - `/handover status` — inspect pending handover state and armed auto mode, then resume/cancel after reload.
 - `/handover cancel` — cancel pending handover and armed auto state.
