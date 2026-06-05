@@ -1,15 +1,17 @@
 # Code Review Remediation Plan
 
+Status: Complete. The prioritized remediation work below has been implemented and verified in the current codebase. This file is retained as historical context for the review findings and their acceptance criteria.
+
 ## Context
 
-A repository review was performed for `pi-agent-handoff`, focusing on architecture, modularization, readability, slash-command usability, pending recovery behavior, wizard/context fields, auto-mode behavior, tests, README alignment, and future developer experience.
+A repository review was performed for `pi-session-handover`, focusing on architecture, modularization, readability, slash-command usability, pending recovery behavior, wizard/context fields, auto-mode behavior, tests, README alignment, and future developer experience.
 
 Verification during review:
 
 - `npm test` passed: 19 tests.
 - `npm run typecheck` passed.
 
-Overall assessment: the extension is small and coherent, with a useful separation between config, domain helpers, and prompt construction. The main risk is that `src/index.ts` now coordinates too many concerns and hides edge-case bugs around session-scoped pending state, cancellation recovery, and command parsing.
+Overall assessment at the time: the extension was small and coherent, with a useful separation between config, domain helpers, and prompt construction. The main risk was that `src/index.ts` coordinated too many concerns and hid edge-case bugs around session-scoped pending state, cancellation recovery, and command parsing.
 
 ## Goals
 
@@ -63,9 +65,11 @@ Overall assessment: the extension is small and coherent, with a useful separatio
 
 ## Prioritized remediation tasks
 
+All P0–P3 tasks in this plan are complete unless explicitly noted otherwise.
+
 ### P0 — Fix correctness and recovery issues now
 
-#### 1. Scope pending state to the current session
+#### 1. Scope pending state to the current session — complete
 
 Problem:
 
@@ -84,7 +88,7 @@ Implementation notes:
 - If retaining a cache, key it by current session file and clear/rebuild on `session_start`.
 - Avoid `Array.from(pending.values()).at(-1)` fallback unless the cache is proven session-scoped.
 
-#### 2. Preserve pending recovery when new-session creation is cancelled
+#### 2. Preserve pending recovery when new-session creation is cancelled — complete
 
 Problem:
 
@@ -101,7 +105,7 @@ Implementation notes:
 - Move `HANDOVER_RESOLVED_ENTRY` append until after successful session creation.
 - If Pi requires pre-resolution to avoid duplicate recovery, add a compensating pending/reopened entry on cancellation and test it.
 
-#### 3. Parse slash subcommands by exact first token
+#### 3. Parse slash subcommands by exact first token — complete
 
 Problem:
 
@@ -120,7 +124,7 @@ Implementation notes:
 - Match `command === "auto"`, `command === "status"`, `command === "cancel"`.
 - Treat all other input as the original handover description.
 
-#### 4. Clear stale auto footer status
+#### 4. Clear stale auto footer status — complete
 
 Problem:
 
@@ -132,9 +136,9 @@ Acceptance criteria:
 - Cancelling auto state clears status.
 - Regression test or mocked UI assertion covers status clearing.
 
-### P1 — Add tests around extension flows
+### P1 — Add tests around extension flows — complete
 
-#### 5. Add mocked ExtensionAPI command/tool tests for `src/index.ts`
+#### 5. Add mocked ExtensionAPI command/tool tests for `src/index.ts` — complete
 
 Problem:
 
@@ -156,9 +160,9 @@ Implementation notes:
 - Build a lightweight fake `ExtensionAPI` that captures registered commands/tools, appended entries, sent user messages, UI calls, and `ctx.newSession` behavior.
 - Keep tests behavior-focused rather than duplicating implementation internals.
 
-### P2 — Modularize `src/index.ts`
+### P2 — Modularize `src/index.ts` — complete
 
-#### 6. Split `src/index.ts` into smaller modules
+#### 6. Split `src/index.ts` into smaller modules — complete
 
 Problem:
 
@@ -186,9 +190,9 @@ Acceptance criteria:
 - No behavior changes except those covered by P0 fixes.
 - Existing tests still pass, and new flow tests continue to pass.
 
-### P3 — Improve usability and documentation
+### P3 — Improve usability and documentation — complete
 
-#### 7. Clarify review modal controls
+#### 7. Clarify review modal controls — complete
 
 Problem:
 
@@ -209,7 +213,7 @@ Acceptance criteria:
 
 - README documents current behavior: every configured `promptContextFields` item is prompted, fields are required by default, `required: false` allows blanks, and non-empty `default` values prefill/fallback blank input.
 
-#### 9. Clarify auto mode behavior
+#### 9. Clarify auto mode behavior — complete
 
 Problem:
 
@@ -220,7 +224,7 @@ Acceptance criteria:
 - README explains that auto mode is bounded carry-forward, not an independent trigger system.
 - The docs mention max depth and that the agent still uses `handover_complete`.
 
-#### 10. De-emphasize `/handover-continue`
+#### 10. De-emphasize `/handover-continue` — complete
 
 Problem:
 
@@ -230,7 +234,7 @@ Acceptance criteria:
 
 - Move `/handover-continue` to an internal/debug note, or remove it from the main command list.
 
-#### 11. Clean up roadmap wording
+#### 11. Clean up roadmap wording — complete
 
 Problem:
 
