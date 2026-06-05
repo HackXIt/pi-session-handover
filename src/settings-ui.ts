@@ -457,14 +457,40 @@ function renderSettings(
 	return renderBox(theme, width, "Handover settings", lines.map((line) => truncate(line, bodyWidth)));
 }
 
+function wrapPlainLine(line: string, width: number): string[] {
+	if (!line) return [""];
+	const words = line.split(/(\s+)/);
+	const lines: string[] = [];
+	let current = "";
+	for (const word of words) {
+		if (!word) continue;
+		if (visibleLength(current + word) <= width) {
+			current += word;
+			continue;
+		}
+		if (current.trim()) lines.push(current.trimEnd());
+		current = word.trimStart();
+		while (visibleLength(current) > width) {
+			lines.push(current.slice(0, width));
+			current = current.slice(width);
+		}
+	}
+	if (current || lines.length === 0) lines.push(current.trimEnd());
+	return lines;
+}
+
+function wrapPlainText(text: string, width: number): string[] {
+	return text.split("\n").flatMap((line) => wrapPlainLine(line, width));
+}
+
 function renderTextEditor(width: number, theme: CustomTheme, mode: Extract<SettingsOverlayMode, { kind: "edit-text" }>): string[] {
 	const bodyWidth = Math.max(20, width - 4);
-	const valueLines = mode.multiline ? mode.draft.split("\n") : [mode.draft];
-	const preview = valueLines.length ? valueLines : [""];
+	const textWidth = Math.max(10, bodyWidth - 4);
+	const preview = wrapPlainText(mode.draft, textWidth);
 	const body = [theme.fg("accent", mode.item.label), ""];
-	const visibleLines = mode.multiline ? preview.slice(-10) : preview;
+	const visibleLines = preview.slice(-10);
 	for (const line of visibleLines) body.push(`  ${line || theme.fg("dim", "<empty>")}`);
-	if (preview.length > visibleLines.length) body.splice(2, 0, theme.fg("dim", `  … ${preview.length - visibleLines.length} earlier lines`));
+	if (preview.length > visibleLines.length) body.splice(2, 0, theme.fg("dim", `  … ${preview.length - visibleLines.length} earlier wrapped lines`));
 	if (mode.message) body.push("", theme.fg("warning", mode.message));
 	body.push("", theme.fg("dim", mode.multiline ? "Type to edit • Shift+Enter newline • Enter save • Esc cancel" : "Type to edit • Enter save • Esc cancel"));
 	return renderBox(theme, width, "Edit setting", body.map((line) => truncate(line, bodyWidth)));
