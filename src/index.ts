@@ -3,12 +3,14 @@ import { registerHandoverCommands } from "./commands.js";
 import { registerHandoverTool } from "./handover-tool.js";
 import { HandoverRuntimeState } from "./pending-store.js";
 import { pendingSummary } from "./review-ui.js";
+import { installQueuedSlashCommandCompat } from "./sdk-compat.js";
 
 function makeId(): string {
 	return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export default function (pi: ExtensionAPI) {
+	installQueuedSlashCommandCompat();
 	const state = new HandoverRuntimeState();
 
 	pi.on("session_start", async (_event, ctx) => {

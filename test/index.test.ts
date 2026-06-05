@@ -396,6 +396,33 @@ describe("handover extension flows", () => {
 		expect(entries.at(-1)?.data).toMatchObject({ id: item.id, reason: "resumed" });
 	});
 
+	it("handover-continue does not keep the old command context alive while replacement prompt runs", async () => {
+		const cwd = await createCwd();
+		const item = pendingItem();
+		const entries: Entry[] = [{ type: "custom", customType: HANDOVER_PENDING_ENTRY, data: item }];
+		const ctx = createContext(cwd, entries);
+		let resolveReplacementPrompt!: () => void;
+		ctx.newSession.mockImplementationOnce(async (options) => {
+			await options.setup?.({ appendCustomEntry: (customType, data) => entries.push({ type: "custom", customType, data }) });
+			await options.withSession?.({
+				sendUserMessage: async (message) => {
+					ctx.replacementMessages.push(message);
+					await new Promise<void>((resolve) => {
+						resolveReplacementPrompt = resolve;
+					});
+				},
+			});
+			return { cancelled: false };
+		});
+		const pi = createPi(ctx);
+
+		const commandPromise = pi.commands.get("handover-continue")!(item.id, ctx);
+		await vi.waitFor(() => expect(ctx.replacementMessages).toEqual([item.nextPrompt]));
+
+		await commandPromise;
+		resolveReplacementPrompt();
+	});
+
 	it("handover-continue carries automatic handover state into the replacement session", async () => {
 		const cwd = await createCwd();
 		const item = {

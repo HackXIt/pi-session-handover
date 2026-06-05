@@ -153,7 +153,10 @@ export function registerHandoverCommands(pi: ExtensionAPI, state: HandoverRuntim
 					if (nextAuto) sessionManager.appendCustomEntry(HANDOVER_AUTO_STATE_ENTRY, nextAuto);
 				},
 				withSession: async (replacementCtx) => {
-					await replacementCtx.sendUserMessage(nextPrompt);
+					void replacementCtx.sendUserMessage(nextPrompt).catch((error: unknown) => {
+						const message = error instanceof Error ? error.message : String(error);
+						replacementCtx.ui.notify(`Handover prompt failed: ${message}`, "error");
+					});
 				},
 			});
 
