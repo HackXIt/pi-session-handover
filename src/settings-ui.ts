@@ -93,19 +93,21 @@ function pad(text: string, width: number): string {
 }
 
 function renderBox(theme: CustomTheme, width: number, title: string, body: string[]): string[] {
-	const innerWidth = Math.max(20, width - 4);
+	const contentWidth = Math.max(20, width - 4);
+	const boxWidth = contentWidth + 4;
+	const horizontalWidth = boxWidth - 2;
 	const border = (text: string) => theme.fg("borderAccent", text);
 	const titleText = ` ${title} `;
-	const titleWidth = Math.min(titleText.length, innerWidth);
-	const left = Math.max(0, Math.floor((innerWidth - titleWidth) / 2));
-	const right = Math.max(0, innerWidth - titleWidth - left);
+	const titleWidth = Math.min(titleText.length, horizontalWidth);
+	const left = Math.max(0, Math.floor((horizontalWidth - titleWidth) / 2));
+	const right = Math.max(0, horizontalWidth - titleWidth - left);
 	const lines = [
 		border(`╭${"─".repeat(left)}`) + theme.fg("accent", theme.bold(truncate(titleText, titleWidth))) + border(`${"─".repeat(right)}╮`),
 	];
 	for (const line of body) {
-		lines.push(border("│ ") + pad(truncate(line, innerWidth), innerWidth) + border(" │"));
+		lines.push(border("│ ") + pad(truncate(line, contentWidth), contentWidth) + border(" │"));
 	}
-	lines.push(border(`╰${"─".repeat(innerWidth)}╯`));
+	lines.push(border(`╰${"─".repeat(horizontalWidth)}╯`));
 	return lines;
 }
 
