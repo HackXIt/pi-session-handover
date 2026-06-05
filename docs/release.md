@@ -14,11 +14,14 @@ Pi can install it directly from git, or from a GitLab npm package after a releas
 
 ## CI pipeline
 
-`.gitlab-ci.yml` runs three stages on GitLab:
+`.gitlab-ci.yml` runs four stages on GitLab:
 
 1. `test` — installs dependencies with `npm ci` and runs `npm run ci`.
 2. `package` — runs `npm pack` and stores the generated tarball as a short-lived artifact.
 3. `publish:gitlab-npm` — on semantic-version tags only, publishes the package to the GitLab npm Package Registry.
+4. `release:gitlab` — on semantic-version tags only, creates a GitLab Release entry after package publication succeeds.
+
+Branch pipelines validate and create pipeline artifacts, but they do not publish packages or create GitLab Releases. The GitLab **Deploy > Package Registry** and **Deploy > Releases** UI pages are populated only after a semantic-version tag pipeline runs.
 
 The CI check includes:
 
@@ -39,7 +42,7 @@ v1.0.0
 v1.0.0-beta.1
 ```
 
-On a matching tag, CI strips the optional leading `v`, updates the package version inside the CI working copy with `npm version --no-git-tag-version`, and publishes that version. The repository does not need a separate version-bump commit for each release.
+On a matching tag, CI strips the optional leading `v`, updates the package version inside the CI working copy with `npm version --no-git-tag-version`, publishes that version, then creates a GitLab Release for the tag. The repository does not need a separate version-bump commit for each release.
 
 ## Publishing to GitLab npm Package Registry
 
@@ -84,5 +87,8 @@ pi install git:git.lab.hackxit.com/github-mirrors/personal/pi-session-handover.g
    git push origin v0.1.1
    ```
 
-4. Wait for `publish:gitlab-npm` to complete.
-5. Install or update Pi using the new npm version or git tag.
+4. Wait for `publish:gitlab-npm` and `release:gitlab` to complete.
+5. Confirm GitLab shows:
+   - a package under **Deploy > Package Registry**;
+   - a release under **Deploy > Releases**.
+6. Install or update Pi using the new npm version or git tag.

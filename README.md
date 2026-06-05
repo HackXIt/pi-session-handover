@@ -108,6 +108,7 @@ This repository includes GitLab CI for homelab automation:
 
 - test every branch and tag;
 - build an `npm pack` tarball artifact;
-- publish tagged semantic versions to the GitLab npm Package Registry.
+- publish tagged semantic versions to the GitLab npm Package Registry;
+- create GitLab Releases for tagged semantic versions.
 
 See [docs/release.md](docs/release.md) for versioning, deployment, and installation details.

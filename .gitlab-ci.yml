@@ -4,6 +4,7 @@ stages:
   - test
   - package
   - deploy
+  - release
 
 cache:
   key:
@@ -17,6 +18,9 @@ variables:
 
 before_script:
   - npm ci --prefer-offline
+
+.semver_tag_rules: &semver_tag_rules
+  - if: '$CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/'
 
 test:
   stage: test
@@ -34,8 +38,7 @@ package:
 
 publish:gitlab-npm:
   stage: deploy
-  rules:
-    - if: '$CI_COMMIT_TAG =~ /^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/'
+  rules: *semver_tag_rules
   script:
     - VERSION="${CI_COMMIT_TAG#v}"
     - npm version --no-git-tag-version "$VERSION"
@@ -47,3 +50,26 @@ publish:gitlab-npm:
     - npm publish
   environment:
     name: gitlab-npm
+
+release:gitlab:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  before_script: []
+  needs:
+    - publish:gitlab-npm
+  rules: *semver_tag_rules
+  script:
+    - echo "Creating GitLab Release for ${CI_COMMIT_TAG}"
+  release:
+    tag_name: "$CI_COMMIT_TAG"
+    name: "pi-session-handover $CI_COMMIT_TAG"
+    description: |
+      Published @hackxit/pi-session-handover to the GitLab npm Package Registry.
+
+      Install with Pi after configuring the @hackxit npm scope for this GitLab instance:
+
+      ```bash
+      pi install npm:@hackxit/pi-session-handover@<version>
+      ```
+
+      Use the tag as `<version>` without the optional leading `v`.
