@@ -12,7 +12,7 @@ Install a pinned release from git:
 pi install git:github.com/HackXIt/pi-session-handover@v0.1.0
 ```
 
-Or install from the homelab GitLab npm Package Registry after a tagged release has been published:
+Or install from a configured npm package registry after a tagged release has been published:
 
 ```bash
 pi install npm:@hackxit/pi-session-handover@0.1.0
@@ -100,15 +100,15 @@ npm run package:check
 npm run ci
 ```
 
-`npm run ci` is the same validation used by GitLab CI: tests, TypeScript checking, and an npm package dry run.
+`npm run ci` is the same validation used by CI: tests, TypeScript checking, and an npm package dry run.
 
 ## Release and deployment
 
-This repository includes GitLab CI for homelab automation:
+This repository includes CI for both public GitHub releases and GitLab package publishing:
 
-- test every branch and tag;
-- build an `npm pack` tarball artifact;
-- publish tagged semantic versions to the GitLab npm Package Registry;
-- create GitLab Releases for tagged semantic versions.
+- test every branch and pull request;
+- build an `npm pack` package;
+- create GitHub Releases with package assets for tagged semantic versions;
+- publish tagged semantic versions to a configured GitLab npm Package Registry when GitLab CI is enabled.
 
 See [docs/release.md](docs/release.md) for versioning, deployment, and installation details.
