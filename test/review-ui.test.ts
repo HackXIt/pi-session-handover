@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PendingHandover } from "../src/domain.js";
-import { buildReviewHeaderLines, buildReviewIntroLines } from "../src/review-ui.js";
+import { buildReviewHeaderLines, renderReviewFrameLines } from "../src/review-ui.js";
 
 function pending(overrides: Partial<PendingHandover> = {}): PendingHandover {
 	return {
@@ -44,10 +44,16 @@ describe("handover review header", () => {
 		expect(lines.join("\n")).not.toContain("full logs omitted");
 	});
 
-	it("uses plain header chrome so it does not stack borders above the editor", () => {
-		const lines = buildReviewIntroLines(pending(), 80);
+	it("renders one coherent review frame around header and editor content", () => {
+		const lines = renderReviewFrameLines(80, ["Pending handover pending-1", "Summary", "── editor border ──", "editable prompt"], {
+			title: "Handover review",
+			help: "enter submit • escape cancel",
+		});
 
-		expect(lines[0]).toBe("Handover review");
-		expect(lines.join("\n")).not.toMatch(/[╭╮╰╯│─]/);
+		expect(lines[0]).toContain("Handover review");
+		expect(lines[0]?.startsWith("╭")).toBe(true);
+		expect(lines.at(-1)?.startsWith("╰")).toBe(true);
+		expect(lines.slice(1, -1).every((line) => line.startsWith("│") && line.endsWith("│"))).toBe(true);
+		expect(lines.slice(1, -1).join("\n")).not.toMatch(/[╭╮╰╯]/);
 	});
 });
