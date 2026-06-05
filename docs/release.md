@@ -57,7 +57,7 @@ After a tagged pipeline publishes the package, install it with a scoped npm regi
 
 ```json
 {
-  "packages": ["npm:@hackxit/pi-agent-handoff@0.1.1"]
+  "packages": ["npm:@hackxit/session-handover@0.1.1"]
 }
 ```
 
@@ -70,7 +70,7 @@ npm config set @hackxit:registry https://git.lab.hackxit.com/api/v4/packages/npm
 For direct git installs, pin a tag so `pi update --extensions` can reconcile the exact release:
 
 ```bash
-pi install git:git.lab.hackxit.com/github-mirrors/personal/pi-agent-handoff.git@v0.1.1
+pi install git:git.lab.hackxit.com/github-mirrors/personal/session-handover.git@v0.1.1
 ```
 
 ## Release checklist

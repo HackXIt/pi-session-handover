@@ -44,7 +44,7 @@ export function registerHandoverCommands(pi: ExtensionAPI, state: HandoverRuntim
 				};
 				state.setAuto(autoState);
 				pi.appendEntry(HANDOVER_AUTO_STATE_ENTRY, autoState);
-				ctx.ui.setStatus("pi-agent-handoff", `handover auto ${autoState.depth}/${autoState.maxDepth}`);
+				ctx.ui.setStatus("session-handover", `handover auto ${autoState.depth}/${autoState.maxDepth}`);
 				ctx.ui.notify(autoSummary(autoState), "info");
 				return;
 			}
@@ -67,7 +67,7 @@ export function registerHandoverCommands(pi: ExtensionAPI, state: HandoverRuntim
 						const cancelledAuto = { ...auto, armed: false, updatedAt: new Date().toISOString() };
 						state.setAuto(cancelledAuto);
 						pi.appendEntry(HANDOVER_AUTO_STATE_ENTRY, cancelledAuto);
-						ctx.ui.setStatus("pi-agent-handoff", undefined);
+						ctx.ui.setStatus("session-handover", undefined);
 					}
 					ctx.ui.notify("Handover state cancelled", "info");
 				}
@@ -88,7 +88,7 @@ export function registerHandoverCommands(pi: ExtensionAPI, state: HandoverRuntim
 					const cancelledAuto = { ...auto, armed: false, updatedAt: new Date().toISOString() };
 					state.setAuto(cancelledAuto);
 					pi.appendEntry(HANDOVER_AUTO_STATE_ENTRY, cancelledAuto);
-					ctx.ui.setStatus("pi-agent-handoff", undefined);
+					ctx.ui.setStatus("session-handover", undefined);
 				}
 				ctx.ui.notify("Handover state cancelled", "info");
 				return;
@@ -124,7 +124,7 @@ export function registerHandoverCommands(pi: ExtensionAPI, state: HandoverRuntim
 	});
 
 	pi.registerCommand("handover-continue", {
-		description: "Internal command used by pi-agent-handoff to start the replacement session",
+		description: "Internal command used by session-handover to start the replacement session",
 		handler: async (args, ctx) => {
 			const id = args.trim();
 			const item = state.getPending(ctx, id);

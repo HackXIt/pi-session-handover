@@ -1,5 +1,5 @@
 {
-  "name": "@hackxit/pi-agent-handoff",
+  "name": "@hackxit/session-handover",
   "version": "0.1.0",
   "description": "Pi extension for closing one agent turn and handing over to a new session",
   "keywords": [
