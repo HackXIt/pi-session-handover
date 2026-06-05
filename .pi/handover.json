@@ -1,0 +1,59 @@
+{
+  "taskInputPrompt": "What should the next pi-session-handover agent continue?",
+  "taskInputMultiline": false,
+  "taskInputRequired": true,
+  "reviewPromptBeforeStart": true,
+  "autoReviewPromptBeforeStart": false,
+  "agentInstructions": "Close the current pi-session-handover turn according to this repository's handover rules before calling handover_complete. Prefer small, verified, committed slices.",
+  "nextPromptInstructions": "Write a self-contained prompt for a fresh agent. Include the goal, current branch/commit, relevant plan file, changed files, validation results, risks, and the exact next implementation slice. Mention that this repo uses pi-session-handover and that /handover settings should eventually showcase the settings UI being implemented.",
+  "promptContextFields": [
+    {
+      "name": "plan",
+      "label": "Plan file",
+      "prompt": "Which plan or issue should the next agent follow?",
+      "required": true,
+      "default": ".plans/settings-ui-plan.md"
+    },
+    {
+      "name": "next_slice",
+      "label": "Next slice",
+      "prompt": "What is the exact next implementation slice?",
+      "required": true,
+      "default": "Slice 1 — Config IO model"
+    },
+    {
+      "name": "validation",
+      "label": "Validation",
+      "prompt": "What validation has been run, and what still needs to be run?",
+      "multiline": true,
+      "required": false,
+      "default": "Run npm run ci before handover."
+    },
+    {
+      "name": "risk",
+      "label": "Known risk",
+      "prompt": "What risk or caveat should the next agent keep in mind?",
+      "multiline": true,
+      "required": false,
+      "default": "Do not break existing /handover, /handover auto, /handover status, or /handover-continue behavior."
+    }
+  ],
+  "completionSteps": [
+    {
+      "name": "Verify",
+      "description": "Run npm run ci successfully, or document exactly why it could not be run."
+    },
+    {
+      "name": "Commit",
+      "description": "Commit the completed slice with a concise message."
+    },
+    {
+      "name": "Publish",
+      "description": "Push main to both origin and upstream when network access is available and the user expects the work published."
+    },
+    {
+      "name": "Handover summary",
+      "description": "Summarize changed files, validation, commit hash, remaining risks, and the next slice."
+    }
+  ]
+}
