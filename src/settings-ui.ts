@@ -23,6 +23,9 @@ import {
 } from "./settings-ui-state.js";
 
 type CommandContext = Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1];
+type CustomFactory = Parameters<NonNullable<CommandContext["ui"]["custom"]>>[0];
+type CustomTheme = Parameters<CustomFactory>[1];
+type CustomKeybindings = Parameters<CustomFactory>[2];
 
 type EntryLike = { type: string; customType?: string; data?: unknown };
 
@@ -32,6 +35,17 @@ type SettingsData = {
 	sessionConfig: EditableHandoverConfig;
 	projectRules?: string;
 };
+
+type SettingsOverlayMode =
+	| { kind: "browse" }
+	| {
+			kind: "edit-text";
+			scope: EditableSettingsScope;
+			item: SettingsItem;
+			draft: string;
+			multiline: boolean;
+			message?: string;
+	  };
 
 const KEY = {
 	escape: "\u001b",
@@ -46,6 +60,27 @@ const KEY = {
 
 function truncate(text: string, width: number): string {
 	return text.length > width ? `${text.slice(0, Math.max(0, width - 1))}…` : text;
+}
+
+function pad(text: string, width: number): string {
+	return `${text}${" ".repeat(Math.max(0, width - text.length))}`;
+}
+
+function renderBox(theme: CustomTheme, width: number, title: string, body: string[]): string[] {
+	const innerWidth = Math.max(20, width - 4);
+	const border = (text: string) => theme.fg("borderAccent", text);
+	const titleText = ` ${title} `;
+	const titleWidth = Math.min(titleText.length, innerWidth);
+	const left = Math.max(0, Math.floor((innerWidth - titleWidth) / 2));
+	const right = Math.max(0, innerWidth - titleWidth - left);
+	const lines = [
+		border(`╭${"─".repeat(left)}`) + theme.fg("accent", theme.bold(truncate(titleText, titleWidth))) + border(`${"─".repeat(right)}╮`),
+	];
+	for (const line of body) {
+		lines.push(border("│ ") + pad(truncate(line, innerWidth), innerWidth) + border(" │"));
+	}
+	lines.push(border(`╰${"─".repeat(innerWidth)}╯`));
+	return lines;
 }
 
 function isEditableConfig(value: unknown): value is EditableHandoverConfig {
@@ -274,13 +309,13 @@ function summarizeStructuredListItem(key: StructuredListKey, item: StructuredLis
 
 function renderStructuredListEditor(
 	width: number,
-	theme: Parameters<Parameters<NonNullable<CommandContext["ui"]["custom"]>>[0]>[1],
+	theme: CustomTheme,
 	label: string,
 	key: StructuredListKey,
 	items: StructuredListItem[],
 	selectedIndex: number,
 ): string[] {
-	const bodyWidth = Math.max(20, width - 2);
+	const bodyWidth = Math.max(20, width - 4);
 	const lines = [theme.fg("accent", theme.bold(label)), ""];
 	if (items.length === 0) lines.push("  No items configured.");
 	items.forEach((item, index) => {
@@ -288,7 +323,7 @@ function renderStructuredListEditor(
 		lines.push(truncate(`${prefix}${summarizeStructuredListItem(key, item)}`, bodyWidth));
 	});
 	lines.push("", "a add • e/Enter edit • d delete • +/- reorder • ↑↓ select • Esc back");
-	return lines.map((line) => truncate(line, bodyWidth));
+	return renderBox(theme, width, label, lines.map((line) => truncate(line, bodyWidth)));
 }
 
 async function openStructuredListEditor(
@@ -303,7 +338,7 @@ async function openStructuredListEditor(
 			? item.value
 			: [];
 
-	await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
+	await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
 		let items: StructuredListItem[] = initialItems.map((entry) => ({ ...entry }));
 		let selectedIndex = 0;
 		const clampSelection = () => {
@@ -328,12 +363,12 @@ async function openStructuredListEditor(
 				return renderStructuredListEditor(width, theme, item.label, item.key, items, selectedIndex);
 			},
 			handleInput(dataKey: string) {
-				if (dataKey === KEY.escape) {
+				if (keyMatches(keybindings, dataKey, "tui.select.cancel")) {
 					done();
 					return;
 				}
-				if (dataKey === KEY.up || dataKey === KEY.down) {
-					selectedIndex += dataKey === KEY.up ? -1 : 1;
+				if (keyMatches(keybindings, dataKey, "tui.select.up") || keyMatches(keybindings, dataKey, "tui.select.down")) {
+					selectedIndex += keyMatches(keybindings, dataKey, "tui.select.up") ? -1 : 1;
 					clampSelection();
 					tui.requestRender();
 					return;
@@ -342,7 +377,7 @@ async function openStructuredListEditor(
 					void editItem();
 					return;
 				}
-				if (dataKey === "e" || KEY.enter.has(dataKey)) {
+				if (dataKey === "e" || keyMatches(keybindings, dataKey, "tui.select.confirm") || KEY.enter.has(dataKey)) {
 					if (items[selectedIndex]) void editItem(selectedIndex);
 					return;
 				}
@@ -365,29 +400,58 @@ async function openStructuredListEditor(
 	}, { overlay: true, overlayOptions: { width: "70%", maxHeight: "80%", minWidth: 60 } });
 }
 
-function renderSettings(width: number, theme: Parameters<Parameters<NonNullable<CommandContext["ui"]["custom"]>>[0]>[1], state: SettingsUiState, models: Record<EditableSettingsScope, SettingsViewModel>): string[] {
-	const bodyWidth = Math.max(20, width - 2);
+function renderSettings(
+	width: number,
+	theme: CustomTheme,
+	state: SettingsUiState,
+	models: Record<EditableSettingsScope, SettingsViewModel>,
+	mode: SettingsOverlayMode,
+): string[] {
+	const bodyWidth = Math.max(20, width - 4);
+	if (mode.kind === "edit-text") return renderTextEditor(width, theme, mode);
+
 	const model = models[state.activeTab];
 	const selectedIndex = state.selectedIndex[state.activeTab];
 	const tab = (scope: EditableSettingsScope, label: string) => state.activeTab === scope ? theme.bg("selectedBg", ` ${label} `) : ` ${label} `;
-	const lines = [
-		theme.fg("accent", theme.bold("Handover settings")),
-		`${tab("global", "Global")} ${tab("project", "Project")}`,
-		"",
-	];
+	const lines = [`${tab("global", "Global")} ${tab("project", "Project")}`, ""];
 
 	model.items.forEach((item, index) => {
 		const selected = index === selectedIndex;
-		const prefix = selected ? "> " : "  ";
+		const prefix = selected ? theme.fg("accent", "> ") : "  ";
 		lines.push(truncate(`${prefix}${item.label}: ${displayValue(item)}`, bodyWidth));
 	});
 
 	const selected = model.items[selectedIndex];
 	if (selected) {
-		lines.push("", truncate(selected.help, bodyWidth));
+		lines.push("", theme.fg("muted", truncate(selected.help, bodyWidth)));
 	}
-	lines.push("", "Tab/←→ tabs • ↑↓ select • Enter edit/toggle/list • Esc close");
-	return lines.map((line) => truncate(line, bodyWidth));
+	lines.push("", theme.fg("dim", "Tab/←→ tabs • ↑↓ select • Enter edit/toggle/list • Esc close"));
+	return renderBox(theme, width, "Handover settings", lines.map((line) => truncate(line, bodyWidth)));
+}
+
+function renderTextEditor(width: number, theme: CustomTheme, mode: Extract<SettingsOverlayMode, { kind: "edit-text" }>): string[] {
+	const bodyWidth = Math.max(20, width - 4);
+	const valueLines = mode.multiline ? mode.draft.split("\n") : [mode.draft];
+	const preview = valueLines.length ? valueLines : [""];
+	const body = [theme.fg("accent", mode.item.label), ""];
+	const visibleLines = mode.multiline ? preview.slice(-10) : preview;
+	for (const line of visibleLines) body.push(`  ${line || theme.fg("dim", "<empty>")}`);
+	if (preview.length > visibleLines.length) body.splice(2, 0, theme.fg("dim", `  … ${preview.length - visibleLines.length} earlier lines`));
+	if (mode.message) body.push("", theme.fg("warning", mode.message));
+	body.push("", theme.fg("dim", mode.multiline ? "Type to edit • Shift+Enter newline • Enter save • Esc cancel" : "Type to edit • Enter save • Esc cancel"));
+	return renderBox(theme, width, "Edit setting", body.map((line) => truncate(line, bodyWidth)));
+}
+
+function isPrintableInput(data: string): boolean {
+	return data.length === 1 && data >= " " && data !== "\u007f";
+}
+
+function removeLastCharacter(value: string): string {
+	return Array.from(value).slice(0, -1).join("");
+}
+
+function keyMatches(keybindings: CustomKeybindings, data: string, id: string): boolean {
+	return keybindings.matches(data, id as never);
 }
 
 export async function openHandoverSettingsShell(ctx: CommandContext): Promise<void> {
@@ -399,59 +463,114 @@ export async function openHandoverSettingsShell(ctx: CommandContext): Promise<vo
 	const data = await loadSettingsData(ctx);
 	if (!data) return;
 
-	await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
+	await ctx.ui.custom<void>((tui, theme, keybindings, done) => {
 		let state = createSettingsUiState();
 		let models = buildModels(data);
+		let mode: SettingsOverlayMode = { kind: "browse" };
 		const refresh = () => {
 			models = buildModels(data);
 			tui.requestRender();
 		};
 		const counts = () => ({ global: models.global.items.length, project: models.project.items.length });
+		const startTextEdit = (scope: EditableSettingsScope, item: SettingsItem) => {
+			mode = {
+				kind: "edit-text",
+				scope,
+				item,
+				draft: typeof item.value === "string" ? item.value : "",
+				multiline: item.kind === "multiline" || item.kind === "markdown",
+			};
+			if (item.key !== "projectRules") state = reduceSettingsUiState(state, { type: "start-edit", key: item.key as keyof HandoverConfig }, counts());
+			tui.requestRender();
+		};
+		const saveTextEdit = async (editMode: Extract<SettingsOverlayMode, { kind: "edit-text" }>) => {
+			const result = editMode.item.key === "projectRules"
+				? await commitProjectRulesEdit({ rules: editMode.draft, save: (nextRules) => saveProjectRules(ctx, data, nextRules) })
+				: await commitScalarSettingEdit({
+					scope: editMode.scope,
+					config: getMutableConfig(data, editMode.scope),
+					key: editMode.item.key as keyof HandoverConfig,
+					value: editMode.draft,
+					save: (targetScope, targetConfig) => saveScopeConfig(targetScope, ctx.cwd, targetConfig),
+				});
+			if (!result.ok) {
+				mode = { ...editMode, message: result.message };
+				tui.requestRender();
+				return;
+			}
+			ctx.ui.notify(editMode.item.key === "projectRules" ? "Saved project handover rules." : `Saved ${editMode.scope} setting: ${editMode.item.label}`, "info");
+			mode = { kind: "browse" };
+			state = reduceSettingsUiState(state, { type: "finish-edit" }, counts());
+			refresh();
+		};
 
 		return {
 			focused: true,
 			render(width: number) {
-				return renderSettings(width, theme, state, models);
+				return renderSettings(width, theme, state, models, mode);
 			},
 			handleInput(dataKey: string) {
-				if (dataKey === KEY.escape) {
+				if (mode.kind === "edit-text") {
+					if (keyMatches(keybindings, dataKey, "tui.select.cancel")) {
+						mode = { kind: "browse" };
+						state = reduceSettingsUiState(state, { type: "finish-edit" }, counts());
+						tui.requestRender();
+						return;
+					}
+					if (mode.multiline && keyMatches(keybindings, dataKey, "tui.input.newLine")) {
+						mode = { ...mode, draft: `${mode.draft}\n`, message: undefined };
+						tui.requestRender();
+						return;
+					}
+					if (keyMatches(keybindings, dataKey, "tui.input.submit") || KEY.enter.has(dataKey)) {
+						void saveTextEdit(mode);
+						return;
+					}
+					if (keyMatches(keybindings, dataKey, "tui.editor.deleteCharBackward") || dataKey === "\u007f") {
+						mode = { ...mode, draft: removeLastCharacter(mode.draft), message: undefined };
+						tui.requestRender();
+						return;
+					}
+					if (isPrintableInput(dataKey)) {
+						mode = { ...mode, draft: `${mode.draft}${dataKey}`, message: undefined };
+						tui.requestRender();
+					}
+					return;
+				}
+
+				if (keyMatches(keybindings, dataKey, "tui.select.cancel")) {
 					done();
 					return;
 				}
-				if (dataKey === KEY.tab || dataKey === KEY.right) {
+				if (keyMatches(keybindings, dataKey, "tui.input.tab") || keyMatches(keybindings, dataKey, "tui.editor.cursorRight")) {
 					state = reduceSettingsUiState(state, { type: "change-tab", delta: 1 }, counts());
 					refresh();
 					return;
 				}
-				if (dataKey === KEY.shiftTab || dataKey === KEY.left) {
+				if (dataKey === KEY.shiftTab || keyMatches(keybindings, dataKey, "tui.editor.cursorLeft")) {
 					state = reduceSettingsUiState(state, { type: "change-tab", delta: -1 }, counts());
 					refresh();
 					return;
 				}
-				if (dataKey === KEY.up || dataKey === KEY.down) {
-					state = reduceSettingsUiState(state, { type: "move-selection", delta: dataKey === KEY.up ? -1 : 1 }, counts());
+				if (keyMatches(keybindings, dataKey, "tui.select.up") || keyMatches(keybindings, dataKey, "tui.select.down")) {
+					state = reduceSettingsUiState(state, { type: "move-selection", delta: keyMatches(keybindings, dataKey, "tui.select.up") ? -1 : 1 }, counts());
 					refresh();
 					return;
 				}
-				if (KEY.enter.has(dataKey)) {
+				if (keyMatches(keybindings, dataKey, "tui.select.confirm") || KEY.enter.has(dataKey)) {
 					const scope = state.activeTab;
 					const item = models[scope].items[state.selectedIndex[scope]];
 					if (!item) return;
-					if (item.kind === "boolean" || item.kind === "string" || item.kind === "multiline") {
-						state = reduceSettingsUiState(state, { type: "start-edit", key: item.key as keyof HandoverConfig }, counts());
-						void editScalarItem(ctx, data, scope, item).then(() => {
-							state = reduceSettingsUiState(state, { type: "finish-edit" }, counts());
-							refresh();
-						});
+					if (item.kind === "boolean") {
+						void editScalarItem(ctx, data, scope, item).then(refresh);
 						return;
 					}
-					if (item.kind === "markdown" && item.key === "projectRules" && scope === "project") {
-						void editProjectRules(ctx, data, item).then(refresh);
+					if (item.kind === "string" || item.kind === "multiline" || (item.kind === "markdown" && item.key === "projectRules" && scope === "project")) {
+						startTextEdit(scope, item);
 						return;
 					}
 					if (isStructuredListItem(item)) {
 						void openStructuredListEditor(ctx, data, scope, item).then(refresh);
-						return;
 					}
 					return;
 				}
@@ -459,5 +578,5 @@ export async function openHandoverSettingsShell(ctx: CommandContext): Promise<vo
 			},
 			invalidate() {},
 		};
-	}, { overlay: true, overlayOptions: { width: "70%", maxHeight: "80%", minWidth: 60 } });
+	}, { overlay: true, overlayOptions: { anchor: "center", width: "80%", maxHeight: "85%", minWidth: 72, margin: 1 } });
 }
