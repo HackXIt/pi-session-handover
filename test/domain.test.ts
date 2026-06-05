@@ -7,6 +7,7 @@ import {
 	createNextAutoState,
 	findAutoHandoverState,
 	findPendingHandover,
+	findPendingHandovers,
 	inferMaxDepthFromPlanText,
 	normalizeChecklist,
 	shouldReviewHandover,
@@ -121,5 +122,16 @@ describe("findPendingHandover", () => {
 				{ type: "custom", customType: HANDOVER_RESOLVED_ENTRY, data: { id: "abc", reason: "cancelled" } },
 			]),
 		).toBeUndefined();
+	});
+
+	it("returns all unresolved pending handovers in session order", () => {
+		const other = { ...pending, id: "def", nextPrompt: "continue other" };
+		expect(
+			findPendingHandovers([
+				{ type: "custom", customType: HANDOVER_PENDING_ENTRY, data: pending },
+				{ type: "custom", customType: HANDOVER_PENDING_ENTRY, data: other },
+				{ type: "custom", customType: HANDOVER_RESOLVED_ENTRY, data: { id: "abc", reason: "resumed" } },
+			]),
+		).toEqual([other]);
 	});
 });

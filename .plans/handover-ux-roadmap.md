@@ -48,14 +48,14 @@ The command injects instructions into the current agent. The agent should:
 2. Generate a self-contained prompt for the next agent session.
 3. Call `handover_complete` with the prompt and structured closure checklist.
 
-### Configuration precedence
+### Configuration layering
 
-Resolve settings in this order:
+Settings are merged from lowest to highest precedence:
 
-1. Session overrides.
-2. Project `.pi` configuration.
-3. Global user extension settings.
-4. Built-in defaults.
+1. Built-in defaults.
+2. Global user extension settings.
+3. Project `.pi` configuration and rules.
+4. Session metadata overrides.
 
 Avoid creating many conflicting settings. Prefer a small set of coarse-grained modes and clear project-specific instruction injection.
 
@@ -95,26 +95,25 @@ Project-level `.pi` configuration should be able to adjust:
 - Agent closure instructions.
 - Next-prompt instructions.
 - Whether review is required by default.
-- Missing required fields for wizard mode.
+- Required or optional context fields for wizard mode.
 
 Long-form project rules can live in `.pi/handover.md` and be appended to the handover instruction.
 
 ### Wizard mode
 
-Wizard mode should exist, but only ask for missing required fields. It should not become the default human flow.
+Wizard mode exists for configured `promptContextFields`. Current behavior prompts for every configured field. Fields are required by default, but individual fields can be optional with `required: false` or prefilled/fallbacked with a non-empty `default`.
 
 A richer form is mainly for orchestrators such as Hermes, not for a human manually deciding to hand over a session.
 
 ### Automatic handover mode
 
-Automatic mode is a future feature.
+Automatic mode is implemented as bounded carry-forward metadata, not as an independent trigger system.
 
-Desired behavior:
+Current behavior:
 
-- Can be enabled by project default.
-- Can be enabled for a session/plan via `/handover auto`.
+- Can be enabled for a session/plan via `/handover auto [maxDepth]`.
 - Persists into subsequent sessions via session metadata copied during handover.
-- Uses an agent-operated structured checkbox/condition.
+- Still relies on the agent completing closure work and calling `handover_complete`.
 - Tracks chain depth in extension-managed state.
 - Displays subtle status such as `handover auto 3/15`.
 
@@ -124,6 +123,7 @@ Primary guardrail:
 
 Deferred guardrails/conditions:
 
+- Project-default auto mode.
 - Token usage triggers.
 - File/event triggers.
 - Machine-verifiable conditions.
@@ -236,8 +236,9 @@ Documentation:
 
 Implemented:
 
-- [x] Add configurable `promptContextFields` for required handover context.
+- [x] Add configurable `promptContextFields` for handover context.
 - [x] Collect configured fields only when present, keeping wizard behavior out of the default path.
+- [x] Support required fields by default, optional fields with `required: false`, and non-empty `default` values used as prefill/fallback.
 - [x] Include collected fields in the agent handover request under `## Handover context`.
 - [x] Document field configuration in README.
 

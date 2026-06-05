@@ -12,6 +12,8 @@ export type HandoverPromptField = {
 	label: string;
 	prompt: string;
 	multiline: boolean;
+	required: boolean;
+	default?: string;
 };
 
 export const HANDOVER_SESSION_CONFIG_ENTRY = "pi-agent-handoff:session-config";
@@ -68,7 +70,16 @@ function parsePromptFields(value: unknown): HandoverPromptField[] | undefined {
 			if (!name) return undefined;
 			const label = typeof item.label === "string" && item.label.trim() ? item.label.trim() : name;
 			const prompt = typeof item.prompt === "string" && item.prompt.trim() ? item.prompt.trim() : label;
-			return { name, label, prompt, multiline: typeof item.multiline === "boolean" ? item.multiline : false };
+			const field: HandoverPromptField = {
+				name,
+				label,
+				prompt,
+				multiline: typeof item.multiline === "boolean" ? item.multiline : false,
+				required: typeof item.required === "boolean" ? item.required : true,
+			};
+			const defaultValue = typeof item.default === "string" ? item.default.trim() : "";
+			if (defaultValue) field.default = defaultValue;
+			return field;
 		})
 		.filter((field): field is HandoverPromptField => field !== undefined);
 	return fields.length > 0 ? fields : undefined;

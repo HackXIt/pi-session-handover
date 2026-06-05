@@ -133,7 +133,7 @@ export function inferMaxDepthFromPlanText(text: string): number | undefined {
 	return taskLines.length > 0 ? taskLines.length : undefined;
 }
 
-export function findPendingHandover(entries: Array<{ type: string; customType?: string; data?: unknown }>): PendingHandover | undefined {
+export function findPendingHandovers(entries: Array<{ type: string; customType?: string; data?: unknown }>): PendingHandover[] {
 	const pending = new Map<string, PendingHandover>();
 	for (const entry of entries) {
 		if (entry.type !== "custom") continue;
@@ -144,7 +144,11 @@ export function findPendingHandover(entries: Array<{ type: string; customType?: 
 			pending.delete(entry.data.id);
 		}
 	}
-	return Array.from(pending.values()).at(-1);
+	return Array.from(pending.values());
+}
+
+export function findPendingHandover(entries: Array<{ type: string; customType?: string; data?: unknown }>): PendingHandover | undefined {
+	return findPendingHandovers(entries).at(-1);
 }
 
 function isAutoHandoverState(value: unknown): value is AutoHandoverState {

@@ -46,7 +46,7 @@ Create `.pi/handover.json` to configure project behavior:
   "nextPromptInstructions": "Write a self-contained prompt with context, files, verification, risks, and exact next steps.",
   "promptContextFields": [
     { "name": "plan", "label": "Plan file", "prompt": "Which plan or issue should the next agent follow?" },
-    { "name": "risk", "label": "Known risk", "prompt": "What risk should the next agent keep in mind?", "multiline": true }
+    { "name": "risk", "label": "Known risk", "prompt": "What risk should the next agent keep in mind?", "multiline": true, "required": false, "default": "none" }
   ],
   "completionSteps": [
     { "name": "Build", "description": "Run a successful build or test suite." },
@@ -59,7 +59,7 @@ Create `.pi/handover.json` to configure project behavior:
 
 Create `.pi/handover.md` for longer project-specific rules. Its contents are appended to the handover instruction sent to the current agent.
 
-`promptContextFields` is optional. When configured, `/handover` asks only for those missing required context fields before it sends the handover instruction to the current agent.
+`promptContextFields` is optional. When configured, `/handover` prompts for each field before it sends the handover instruction to the current agent. Fields are required by default; set `"required": false` to allow blanks. Set a non-empty `"default"` to prefill the input/editor and use that value when the field is left blank.
 
 Use the same JSON shape for global user config when you want defaults across projects. Keep global config minimal, for example:
 
@@ -73,15 +73,17 @@ Use the same JSON shape for global user config when you want defaults across pro
 ## Commands and tools
 
 - `/handover <description>` — ask the current agent to close and prepare a new-session prompt.
-- `/handover auto [maxDepth]` — arm automatic handover carry-forward for this session. If `maxDepth` is omitted, the extension tries to infer it from configured plan/task context, then asks.
+- `/handover auto [maxDepth]` — arm bounded automatic handover carry-forward for this session. This is not an independent trigger system: the current agent still completes work and calls `handover_complete`, and the extension carries auto metadata into replacement sessions until `maxDepth` is reached. If `maxDepth` is omitted, the extension tries to infer it from configured plan/task context, then asks.
 - `/handover status` — inspect pending handover state and armed auto mode, then resume/cancel after reload.
 - `/handover cancel` — cancel pending handover and armed auto state.
-- `/handover-continue <id>` — internal command queued by the tool.
 - `handover_complete` — tool the current agent calls with the final `nextPrompt`, summary, and closure checklist.
+
+Internal/debug command: `/handover-continue <id>` is queued by `handover_complete` to start the replacement session and is mainly useful for recovery debugging.
 
 ## Verify
 
 ```bash
 npm test
 npm run typecheck
+npm run ci
 ```

@@ -39,13 +39,15 @@ it("merges prompt context fields for wizard mode", () => {
 		promptContextFields: [
 			{ name: "plan", label: "Plan file", prompt: "Which plan file?", multiline: false },
 			{ name: "risks" },
+			{ name: "notes", required: false, default: "none" },
 			{ label: "invalid" },
 		],
 	});
 
 	expect(config.promptContextFields).toEqual([
-		{ name: "plan", label: "Plan file", prompt: "Which plan file?", multiline: false },
-		{ name: "risks", label: "risks", prompt: "risks", multiline: false },
+		{ name: "plan", label: "Plan file", prompt: "Which plan file?", multiline: false, required: true },
+		{ name: "risks", label: "risks", prompt: "risks", multiline: false, required: true },
+		{ name: "notes", label: "notes", prompt: "notes", multiline: false, required: false, default: "none" },
 	]);
 });
 
