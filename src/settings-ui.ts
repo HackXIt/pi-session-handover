@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { HANDOVER_SESSION_CONFIG_ENTRY, type HandoverConfig, type HandoverPromptField, type HandoverStep } from "./config.js";
 import {
@@ -58,12 +59,37 @@ const KEY = {
 	left: "\u001b[D",
 };
 
+function visibleLength(text: string): number {
+	return stripVTControlCharacters(text).length;
+}
+
 function truncate(text: string, width: number): string {
-	return text.length > width ? `${text.slice(0, Math.max(0, width - 1))}…` : text;
+	if (visibleLength(text) <= width) return text;
+	const targetWidth = Math.max(0, width - 1);
+	let output = "";
+	let visible = 0;
+	for (let index = 0; index < text.length && visible < targetWidth;) {
+		const char = text[index];
+		if (char === "\u001b") {
+			const match = /^\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\))/.exec(text.slice(index));
+			if (match) {
+				output += match[0];
+				index += match[0].length;
+				continue;
+			}
+		}
+		const codePoint = text.codePointAt(index);
+		if (codePoint === undefined) break;
+		const next = String.fromCodePoint(codePoint);
+		output += next;
+		visible += 1;
+		index += next.length;
+	}
+	return `${output}…`;
 }
 
 function pad(text: string, width: number): string {
-	return `${text}${" ".repeat(Math.max(0, width - text.length))}`;
+	return `${text}${" ".repeat(Math.max(0, width - visibleLength(text)))}`;
 }
 
 function renderBox(theme: CustomTheme, width: number, title: string, body: string[]): string[] {
