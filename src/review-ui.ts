@@ -64,13 +64,41 @@ function renderBox(theme: CustomTheme, width: number, title: string, body: strin
 
 function checklistLine(item: PendingHandover["checklist"][number]): string {
 	const status = item.status === "done" ? "✓" : item.status === "blocked" ? "!" : "-";
-	const evidence = item.evidence === undefined ? "" : ` evidence=${JSON.stringify(item.evidence)}`;
-	return `${status} ${item.name}${item.notes ? ` — ${item.notes}` : ""}${evidence}`;
+	return `${status} ${item.name}${item.notes ? ` — ${item.notes}` : ""}`;
+}
+
+function pluralStatus(count: number, label: string): string | undefined {
+	return count > 0 ? `${count} ${label}` : undefined;
 }
 
 export function pendingSummary(item: PendingHandover): string {
 	const blocked = item.checklist.filter((step) => step.status === "blocked").length;
 	return `Pending handover ${item.id}: ${item.checklist.length} checklist item(s), ${blocked} blocked.`;
+}
+
+export function buildReviewHeaderLines(item: PendingHandover, textWidth: number): string[] {
+	const done = item.checklist.filter((step) => step.status === "done").length;
+	const blocked = item.checklist.filter((step) => step.status === "blocked").length;
+	const skipped = item.checklist.length - done - blocked;
+	const openItems = item.checklist.filter((step) => step.status !== "done");
+	const checklistSummary =
+		openItems.length === 0
+			? `Checklist: all ${item.checklist.length} item(s) done.`
+			: `Checklist: ${[pluralStatus(done, "done"), pluralStatus(blocked, "blocked"), pluralStatus(skipped, "skipped")]
+					.filter((part): part is string => part !== undefined)
+					.join(", ")}.`;
+	return [
+		pendingSummary(item),
+		"Submit the editor to accept; use the external-editor keybinding for large edits.",
+		"",
+		"Summary",
+		...(item.summary ? wrapPlainText(item.summary, textWidth).slice(0, 4) : ["(none)"]),
+		"",
+		checklistSummary,
+		...openItems.flatMap((entry) => wrapPlainText(checklistLine(entry), textWidth)).slice(0, 5),
+		"",
+		"Next-session prompt",
+	];
 }
 
 export async function reviewPendingHandover(ctx: CommandContext, item: PendingHandover): Promise<string | undefined> {
@@ -93,18 +121,11 @@ export async function reviewPendingHandover(ctx: CommandContext, item: PendingHa
 			render(width: number) {
 				const bodyWidth = Math.max(20, width - 4);
 				const textWidth = Math.max(10, bodyWidth - 2);
-				const header = [
-					pendingSummary(item),
-					"Accept by submitting the editor; cancel with the editor cancel keybinding.",
-					"",
-					theme.fg("accent", "Summary"),
-					...(item.summary ? wrapPlainText(item.summary, textWidth) : ["(none)"]),
-					"",
-					theme.fg("accent", "Checklist"),
-					...(item.checklist.length > 0 ? item.checklist.flatMap((entry) => wrapPlainText(checklistLine(entry), textWidth)) : ["(none supplied)"]),
-					"",
-					theme.fg("accent", "Next-session prompt"),
-				];
+				const header = buildReviewHeaderLines(item, textWidth).map((line) => {
+					if (line === "Summary" || line === "Next-session prompt") return theme.fg("accent", line);
+					if (line.startsWith("Checklist:")) return theme.fg("accent", line);
+					return line;
+				});
 				return [...renderBox(theme, width, "Handover review", header), ...editor.render(width)];
 			},
 			handleInput(data: string) {
