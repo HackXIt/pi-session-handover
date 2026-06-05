@@ -16,6 +16,7 @@ it("merges json config and markdown project rules", async () => {
 		join(dir, ".pi", "handover.json"),
 		JSON.stringify({
 			reviewPromptBeforeStart: false,
+			autoReviewPromptBeforeStart: true,
 			taskInputMultiline: true,
 			completionSteps: [{ name: "Perforce", description: "Submit the changelist." }],
 		}),
@@ -24,6 +25,7 @@ it("merges json config and markdown project rules", async () => {
 
 	const config = await loadHandoverConfig(dir, { globalConfigPath: join(dir, "missing-global.json") });
 	expect(config.reviewPromptBeforeStart).toBe(false);
+	expect(config.autoReviewPromptBeforeStart).toBe(true);
 	expect(config.taskInputMultiline).toBe(true);
 	expect(config.completionSteps).toEqual([{ name: "Perforce", description: "Submit the changelist." }]);
 	expect(config.projectRules).toBe("Always mention the plan file.");

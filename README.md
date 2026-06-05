@@ -6,8 +6,16 @@ Pi package that adds `/handover` for plan-driven agent handoffs.
 
 ## Install
 
+Install a pinned release from git:
+
 ```bash
-pi install git:github.com/HackXIt/pi-agent-handoff
+pi install git:github.com/HackXIt/pi-agent-handoff@v0.1.0
+```
+
+Or install from the homelab GitLab npm Package Registry after a tagged release has been published:
+
+```bash
+pi install npm:@hackxit/pi-agent-handoff@0.1.0
 ```
 
 Or test from a checkout:
@@ -42,6 +50,7 @@ Create `.pi/handover.json` to configure project behavior:
   "taskInputMultiline": false,
   "taskInputRequired": true,
   "reviewPromptBeforeStart": true,
+  "autoReviewPromptBeforeStart": false,
   "agentInstructions": "Close this turn according to the project rules before handing over.",
   "nextPromptInstructions": "Write a self-contained prompt with context, files, verification, risks, and exact next steps.",
   "promptContextFields": [
@@ -60,6 +69,8 @@ Create `.pi/handover.json` to configure project behavior:
 Create `.pi/handover.md` for longer project-specific rules. Its contents are appended to the handover instruction sent to the current agent.
 
 `promptContextFields` is optional. When configured, `/handover` prompts for each field before it sends the handover instruction to the current agent. Fields are required by default; set `"required": false` to allow blanks. Set a non-empty `"default"` to prefill the input/editor and use that value when the field is left blank.
+
+`reviewPromptBeforeStart` controls manual handovers. It also forces review when a closure checklist item is blocked. `autoReviewPromptBeforeStart` controls automatic handover chains separately and defaults to `false`, so auto mode continues without showing the prompt-review modal unless the project explicitly opts in.
 
 Use the same JSON shape for global user config when you want defaults across projects. Keep global config minimal, for example:
 
@@ -80,10 +91,23 @@ Use the same JSON shape for global user config when you want defaults across pro
 
 Internal/debug command: `/handover-continue <id>` is queued by `handover_complete` to start the replacement session and is mainly useful for recovery debugging.
 
-## Verify
+## Development and verification
 
 ```bash
 npm test
 npm run typecheck
+npm run package:check
 npm run ci
 ```
+
+`npm run ci` is the same validation used by GitLab CI: tests, TypeScript checking, and an npm package dry run.
+
+## Release and deployment
+
+This repository includes GitLab CI for homelab automation:
+
+- test every branch and tag;
+- build an `npm pack` tarball artifact;
+- publish tagged semantic versions to the GitLab npm Package Registry.
+
+See [docs/release.md](docs/release.md) for versioning, deployment, and installation details.

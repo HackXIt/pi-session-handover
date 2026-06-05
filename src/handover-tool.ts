@@ -52,7 +52,9 @@ export function registerHandoverTool(pi: ExtensionAPI, state: HandoverRuntimeSta
 				summary: params.summary,
 				checklist,
 				parentSession: ctx.sessionManager.getSessionFile(),
-				reviewPromptBeforeStart: shouldReviewHandover(config.reviewPromptBeforeStart, checklist),
+				reviewPromptBeforeStart: auto
+					? config.autoReviewPromptBeforeStart
+					: shouldReviewHandover(config.reviewPromptBeforeStart, checklist),
 				createdAt: new Date().toISOString(),
 				...(auto ? { auto } : {}),
 			};

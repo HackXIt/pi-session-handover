@@ -25,6 +25,7 @@ export type HandoverConfig = {
 	taskInputMultiline: boolean;
 	taskInputRequired: boolean;
 	reviewPromptBeforeStart: boolean;
+	autoReviewPromptBeforeStart: boolean;
 	completionSteps: HandoverStep[];
 	promptContextFields: HandoverPromptField[];
 	projectRules?: string;
@@ -46,6 +47,7 @@ export const defaultConfig: HandoverConfig = {
 	taskInputMultiline: false,
 	taskInputRequired: true,
 	reviewPromptBeforeStart: true,
+	autoReviewPromptBeforeStart: false,
 	completionSteps: DEFAULT_STEPS,
 	promptContextFields: [],
 };
@@ -112,6 +114,10 @@ export function mergeConfig(base: HandoverConfig, override: unknown): HandoverCo
 			typeof override.reviewPromptBeforeStart === "boolean"
 				? override.reviewPromptBeforeStart
 				: base.reviewPromptBeforeStart,
+		autoReviewPromptBeforeStart:
+			typeof override.autoReviewPromptBeforeStart === "boolean"
+				? override.autoReviewPromptBeforeStart
+				: base.autoReviewPromptBeforeStart,
 		completionSteps: parseSteps(override.completionSteps) ?? base.completionSteps,
 		promptContextFields: parsePromptFields(override.promptContextFields) ?? base.promptContextFields,
 		projectRules: typeof override.projectRules === "string" ? override.projectRules : base.projectRules,

@@ -376,6 +376,59 @@ describe("handover extension flows", () => {
 		expect(result).toMatchObject({ terminate: true, details: { checklist: [{ name: "Build", status: "done" }] } });
 	});
 
+	it("handover_complete skips prompt review in auto mode by default", async () => {
+		const cwd = await createCwd({ reviewPromptBeforeStart: true });
+		const auto = {
+			chainId: "chain",
+			depth: 1,
+			maxDepth: 3,
+			armed: true,
+			createdAt: "2026-06-05T00:00:00.000Z",
+			updatedAt: "2026-06-05T00:00:00.000Z",
+		};
+		const entries: Entry[] = [{ type: "custom", customType: HANDOVER_AUTO_STATE_ENTRY, data: auto }];
+		const ctx = createContext(cwd, entries);
+		const pi = createPi(ctx);
+
+		await pi.tool!.execute(
+			"call",
+			{
+				nextPrompt: "continue automatically",
+				completedSteps: [{ name: "Build", status: "blocked", notes: "CI unavailable" }],
+			},
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		const pendingEntry = ctx.sessionManager.getEntries().find((entry) => entry.customType === HANDOVER_PENDING_ENTRY);
+		expect(pendingEntry?.data).toMatchObject({
+			nextPrompt: "continue automatically",
+			reviewPromptBeforeStart: false,
+			auto: { chainId: "chain" },
+		});
+	});
+
+	it("handover_complete can be configured to review prompts in auto mode", async () => {
+		const cwd = await createCwd({ autoReviewPromptBeforeStart: true });
+		const auto = {
+			chainId: "chain",
+			depth: 1,
+			maxDepth: 3,
+			armed: true,
+			createdAt: "2026-06-05T00:00:00.000Z",
+			updatedAt: "2026-06-05T00:00:00.000Z",
+		};
+		const entries: Entry[] = [{ type: "custom", customType: HANDOVER_AUTO_STATE_ENTRY, data: auto }];
+		const ctx = createContext(cwd, entries);
+		const pi = createPi(ctx);
+
+		await pi.tool!.execute("call", { nextPrompt: "review automatically" }, undefined, undefined, ctx);
+
+		const pendingEntry = ctx.sessionManager.getEntries().find((entry) => entry.customType === HANDOVER_PENDING_ENTRY);
+		expect(pendingEntry?.data).toMatchObject({ nextPrompt: "review automatically", reviewPromptBeforeStart: true });
+	});
+
 	it("handover-continue starts the replacement session and resolves pending state after success", async () => {
 		const cwd = await createCwd();
 		const item = pendingItem();

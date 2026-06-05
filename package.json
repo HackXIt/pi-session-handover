@@ -3,14 +3,24 @@
   "version": "0.1.0",
   "description": "Pi extension for closing one agent turn and handing over to a new session",
   "keywords": [
-    "pi-package"
+    "pi-package",
+    "pi-extension",
+    "handover"
   ],
   "license": "MIT",
   "type": "module",
+  "files": [
+    "README.md",
+    "LICENSE",
+    "docs",
+    "src",
+    "tsconfig.json"
+  ],
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "ci": "npm test && npm run typecheck"
+    "package:check": "npm pack --dry-run",
+    "ci": "npm test && npm run typecheck && npm run package:check"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
