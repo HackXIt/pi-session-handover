@@ -55,9 +55,9 @@ npm run package:check
 Release tags are the source of truth for package versions. Use tags like:
 
 ```text
-v0.1.1
+0.1.0
+0.1.1
 v0.2.0
-v1.0.0
 v1.0.0-beta.1
 ```
 
@@ -68,7 +68,7 @@ On a matching tag, CI strips the optional leading `v`, updates the package versi
 Pin a tag so `pi update --extensions` can reconcile the exact release:
 
 ```bash
-pi install git:github.com/HackXIt/pi-session-handover@v0.1.1
+pi install git:github.com/HackXIt/pi-session-handover@0.1.0
 ```
 
 The GitHub Release also contains the packed npm tarball as an asset for inspection or manual installation.
@@ -79,7 +79,7 @@ After a tagged pipeline publishes the package, install it with a scoped npm regi
 
 ```json
 {
-  "packages": ["npm:@hackxit/pi-session-handover@0.1.1"]
+  "packages": ["npm:@hackxit/pi-session-handover@0.1.0"]
 }
 ```
 
@@ -106,9 +106,9 @@ No project secret is required for the default GitLab Package Registry flow. If t
 3. Create and push a tag to the release remote(s):
 
    ```bash
-   git tag v0.1.1
-   git push origin v0.1.1
-   git push upstream v0.1.1
+   git tag 0.1.0
+   git push origin 0.1.0
+   git push upstream 0.1.0
    ```
 
 4. Wait for the tag pipelines to complete.

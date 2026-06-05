@@ -9,7 +9,7 @@ Pi package that adds `/handover` for plan-driven agent handoffs.
 Install a pinned release from git:
 
 ```bash
-pi install git:github.com/HackXIt/pi-session-handover@v0.1.0
+pi install git:github.com/HackXIt/pi-session-handover@0.1.0
 ```
 
 Or install from a configured npm package registry after a tagged release has been published:
