@@ -153,8 +153,21 @@ describe("handover extension flows", () => {
 		expect(ctx.sentUserMessages[0]?.options).toEqual({ deliverAs: "followUp" });
 	});
 
-	it("prompts for a handover description when no argument is supplied", async () => {
+	it("opens a multiline editor for a handover description when no argument is supplied", async () => {
 		const cwd = await createCwd({ taskInputRequired: true, taskInputPrompt: "Continue what?" });
+		const ctx = createContext(cwd);
+		ctx.ui.editor.mockResolvedValue("phase 3");
+		const pi = createPi(ctx);
+
+		await pi.commands.get("handover")!("", ctx);
+
+		expect(ctx.ui.editor).toHaveBeenCalledWith("Continue what?", "");
+		expect(ctx.ui.input).not.toHaveBeenCalled();
+		expect(ctx.sentUserMessages[0]?.message).toContain("continue phase 3");
+	});
+
+	it("keeps single-line no-argument handover input when configured", async () => {
+		const cwd = await createCwd({ taskInputRequired: true, taskInputPrompt: "Continue what?", taskInputMultiline: false });
 		const ctx = createContext(cwd);
 		ctx.ui.input.mockResolvedValue("phase 3");
 		const pi = createPi(ctx);
@@ -162,6 +175,7 @@ describe("handover extension flows", () => {
 		await pi.commands.get("handover")!("", ctx);
 
 		expect(ctx.ui.input).toHaveBeenCalledWith("Continue what?", "continue the current plan slice");
+		expect(ctx.ui.editor).not.toHaveBeenCalled();
 		expect(ctx.sentUserMessages[0]?.message).toContain("continue phase 3");
 	});
 

@@ -57,7 +57,7 @@ Create `.pi/handover.json` to configure project behavior:
 ```json
 {
   "taskInputPrompt": "What should the next agent continue?",
-  "taskInputMultiline": false,
+  "taskInputMultiline": true,
   "taskInputRequired": true,
   "reviewPromptBeforeStart": true,
   "autoReviewPromptBeforeStart": false,

@@ -44,7 +44,7 @@ export const defaultConfig: HandoverConfig = {
 	nextPromptInstructions:
 		"Write a self-contained first user prompt for a fresh agent session. Include the goal, relevant plan or issue references, changed files, verification status, remaining risks, and the exact next slice of work. Do not assume the new agent can see this conversation.",
 	taskInputPrompt: "What should the next agent continue?",
-	taskInputMultiline: false,
+	taskInputMultiline: true,
 	taskInputRequired: true,
 	reviewPromptBeforeStart: true,
 	autoReviewPromptBeforeStart: false,
