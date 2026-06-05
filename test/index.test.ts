@@ -107,17 +107,20 @@ function createContext(cwd: string, entries: Entry[] = []) {
 function createPi(ctx: FakeContext) {
 	const commands = new Map<string, (args: string, ctx: FakeContext) => Promise<void>>();
 	const commandDescriptions = new Map<string, string>();
+	const commandCompletions = new Map<string, (prefix: string) => Array<{ value: string; label?: string; description?: string }> | null>();
 	let tool: { execute: (...args: any[]) => Promise<unknown> } | undefined;
 	const pi = {
 		commands,
 		commandDescriptions,
+		commandCompletions,
 		get tool() {
 			return tool;
 		},
 		on: vi.fn(),
-		registerCommand: vi.fn((name: string, config: { description?: string; handler: (args: string, ctx: FakeContext) => Promise<void> }) => {
+		registerCommand: vi.fn((name: string, config: { description?: string; getArgumentCompletions?: (prefix: string) => Array<{ value: string; label?: string; description?: string }> | null; handler: (args: string, ctx: FakeContext) => Promise<void> }) => {
 			commands.set(name, config.handler);
 			if (config.description) commandDescriptions.set(name, config.description);
+			if (config.getArgumentCompletions) commandCompletions.set(name, config.getArgumentCompletions);
 		}),
 		registerTool: vi.fn((registered: { execute: (...args: any[]) => Promise<unknown> }) => {
 			tool = registered;
@@ -187,6 +190,18 @@ describe("handover extension flows", () => {
 		expect(ctx.sentUserMessages).toEqual([]);
 		expect(ctx.ui.input).not.toHaveBeenCalled();
 		expect(pi.commandDescriptions.get("handover")).toContain("settings");
+	});
+
+	it("offers argument completions for /handover subcommands", async () => {
+		const cwd = await createCwd();
+		const ctx = createContext(cwd);
+		const pi = createPi(ctx);
+		const complete = pi.commandCompletions.get("handover");
+
+		expect(complete?.("")?.map((item) => item.value)).toEqual(["auto", "status", "cancel", "settings"]);
+		expect(complete?.("s")?.map((item) => item.value)).toEqual(["status", "settings"]);
+		expect(complete?.("auto ")?.map((item) => item.value)).toEqual(["auto 2", "auto 3", "auto 5", "auto 8"]);
+		expect(complete?.("finish docs")).toBeNull();
 	});
 
 	it("reports an actionable settings error when custom UI is unavailable", async () => {

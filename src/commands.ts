@@ -14,9 +14,31 @@ import type { HandoverRuntimeState } from "./pending-store.js";
 import { pendingSummary, reviewPendingHandover } from "./review-ui.js";
 import { openHandoverSettingsShell } from "./settings-ui.js";
 
+function getHandoverArgumentCompletions(prefix: string) {
+	const options = [
+		{ value: "auto", label: "auto", description: "Arm bounded automatic handover carry-forward" },
+		{ value: "status", label: "status", description: "Inspect pending handover and auto mode" },
+		{ value: "cancel", label: "cancel", description: "Cancel pending handover and auto mode" },
+		{ value: "settings", label: "settings", description: "Open the Global/Project settings editor" },
+	];
+	const trimmed = prefix.trimStart();
+	if (trimmed.startsWith("auto ")) {
+		const autoOptions = ["auto 2", "auto 3", "auto 5", "auto 8"].map((value) => ({
+			value,
+			label: value,
+			description: "Arm auto handover with this max depth",
+		}));
+		const filtered = autoOptions.filter((item) => item.value.startsWith(trimmed));
+		return filtered.length > 0 ? filtered : null;
+	}
+	const filtered = options.filter((item) => item.value.startsWith(trimmed));
+	return filtered.length > 0 ? filtered : null;
+}
+
 export function registerHandoverCommands(pi: ExtensionAPI, state: HandoverRuntimeState, makeId: () => string): void {
 	pi.registerCommand("handover", {
 		description: "Close this turn and hand over to a fresh pi session. Subcommands: auto, status, cancel, settings.",
+		getArgumentCompletions: getHandoverArgumentCompletions,
 		handler: async (args, ctx) => {
 			const subcommand = args.trim();
 			const [command, ...rest] = subcommand.split(/\s+/);
