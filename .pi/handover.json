@@ -1,6 +1,6 @@
 {
   "taskInputPrompt": "What should the next pi-session-handover agent continue?",
-  "taskInputMultiline": false,
+  "taskInputMultiline": true,
   "taskInputRequired": true,
   "reviewPromptBeforeStart": true,
   "autoReviewPromptBeforeStart": false,
