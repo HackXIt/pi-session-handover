@@ -1,4 +1,4 @@
-import type { HandoverConfig } from "./config.js";
+import type { HandoverConfig, HandoverPromptField, HandoverStep } from "./config.js";
 import type { EditableHandoverConfig, EditableSettingsScope } from "./settings-config.js";
 
 export type SettingsUiTab = EditableSettingsScope;
@@ -18,6 +18,16 @@ export type SettingsUiAction =
 export type SettingsItemCounts = Record<SettingsUiTab, number>;
 
 export type CommitScalarSettingEditResult = { ok: true } | { ok: false; message: string };
+export type CommitStructuredListEditResult = { ok: true } | { ok: false; message: string };
+
+export type StructuredListKey = "completionSteps" | "promptContextFields";
+export type StructuredListItem = HandoverStep | HandoverPromptField;
+
+export type StructuredListEditAction =
+	| { type: "add"; item: StructuredListItem }
+	| { type: "edit"; index: number; item: StructuredListItem }
+	| { type: "delete"; index: number }
+	| { type: "move"; index: number; delta: number };
 
 export type CommitScalarSettingEditOptions = {
 	scope: EditableSettingsScope;
@@ -25,6 +35,14 @@ export type CommitScalarSettingEditOptions = {
 	key: keyof HandoverConfig;
 	value: string | boolean;
 	save: (scope: EditableSettingsScope, config: EditableHandoverConfig) => Promise<CommitScalarSettingEditResult>;
+};
+
+export type CommitStructuredListEditOptions = {
+	scope: EditableSettingsScope;
+	config: EditableHandoverConfig;
+	key: StructuredListKey;
+	items: StructuredListItem[];
+	save: (scope: EditableSettingsScope, config: EditableHandoverConfig) => Promise<CommitStructuredListEditResult>;
 };
 
 const TABS: SettingsUiTab[] = ["global", "project"];
@@ -73,6 +91,55 @@ export function reduceSettingsUiState(
 
 export async function commitScalarSettingEdit(options: CommitScalarSettingEditOptions): Promise<CommitScalarSettingEditResult> {
 	const nextConfig = { ...options.config, [options.key]: options.value };
+	const result = await options.save(options.scope, nextConfig);
+	if (result.ok) Object.assign(options.config, nextConfig);
+	return result;
+}
+
+function normalizeItemName(item: StructuredListItem): string {
+	return typeof item.name === "string" ? item.name.trim() : "";
+}
+
+export function validateStructuredListItems(
+	key: StructuredListKey,
+	items: StructuredListItem[],
+): CommitStructuredListEditResult {
+	for (const [index, item] of items.entries()) {
+		if (normalizeItemName(item)) continue;
+		const label = key === "completionSteps" ? "Completion step" : "Prompt context field";
+		return { ok: false, message: `${label} ${index + 1} needs a non-empty name.` };
+	}
+	return { ok: true };
+}
+
+export function applyStructuredListEdit(
+	_key: StructuredListKey,
+	items: StructuredListItem[],
+	action: StructuredListEditAction,
+): StructuredListItem[] {
+	const nextItems = items.map((item) => ({ ...item }));
+	if (action.type === "add") return [...nextItems, { ...action.item }];
+	if (action.type === "edit") {
+		if (action.index < 0 || action.index >= nextItems.length) return nextItems;
+		nextItems[action.index] = { ...action.item };
+		return nextItems;
+	}
+	if (action.type === "delete") return nextItems.filter((_, index) => index !== action.index);
+
+	const from = action.index;
+	const to = from + action.delta;
+	if (from < 0 || from >= nextItems.length || to < 0 || to >= nextItems.length) return nextItems;
+	const [item] = nextItems.splice(from, 1);
+	if (item) nextItems.splice(to, 0, item);
+	return nextItems;
+}
+
+export async function commitStructuredListEdit(
+	options: CommitStructuredListEditOptions,
+): Promise<CommitStructuredListEditResult> {
+	const validation = validateStructuredListItems(options.key, options.items);
+	if (!validation.ok) return validation;
+	const nextConfig = { ...options.config, [options.key]: options.items };
 	const result = await options.save(options.scope, nextConfig);
 	if (result.ok) Object.assign(options.config, nextConfig);
 	return result;

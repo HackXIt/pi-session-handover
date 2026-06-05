@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { HANDOVER_SESSION_CONFIG_ENTRY, type HandoverConfig } from "./config.js";
+import { HANDOVER_SESSION_CONFIG_ENTRY, type HandoverConfig, type HandoverPromptField, type HandoverStep } from "./config.js";
 import {
 	getEditableSettingsTargetPaths,
 	loadEditableSettingsConfig,
@@ -9,11 +9,15 @@ import {
 } from "./settings-config.js";
 import { buildSettingsViewModel, type SettingsItem, type SettingsViewModel } from "./settings-view-model.js";
 import {
+	applyStructuredListEdit,
 	commitScalarSettingEdit,
+	commitStructuredListEdit,
 	createSettingsUiState,
 	reduceSettingsUiState,
 	type CommitScalarSettingEditResult,
 	type SettingsUiState,
+	type StructuredListItem,
+	type StructuredListKey,
 } from "./settings-ui-state.js";
 
 type CommandContext = Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1];
@@ -78,6 +82,18 @@ function isJsonScalarItem(item: SettingsItem): item is SettingsItem & { key: key
 	return item.kind === "boolean" || item.kind === "string" || item.kind === "multiline";
 }
 
+function isStructuredListItem(item: SettingsItem): item is SettingsItem & { key: StructuredListKey } {
+	return item.key === "completionSteps" || item.key === "promptContextFields";
+}
+
+function isHandoverStepArray(value: unknown): value is HandoverStep[] {
+	return Array.isArray(value);
+}
+
+function isPromptFieldArray(value: unknown): value is HandoverPromptField[] {
+	return Array.isArray(value);
+}
+
 function displayValue(item: SettingsItem): string {
 	const badges = [
 		item.configured ? "set" : item.source,
@@ -113,11 +129,30 @@ async function saveScopeConfig(scope: EditableSettingsScope, cwd: string, config
 	return result.ok ? { ok: true } : { ok: false, message: `${result.error.path} contains invalid JSON (${result.error.message})` };
 }
 
-async function editScalarItem(ctx: CommandContext, data: SettingsData, scope: EditableSettingsScope, item: SettingsItem): Promise<boolean> {
-	if (!isJsonScalarItem(item)) {
-		ctx.ui.notify("Structured settings will be editable in a later settings slice.", "info");
+async function saveStructuredList(
+	ctx: CommandContext,
+	data: SettingsData,
+	scope: EditableSettingsScope,
+	key: StructuredListKey,
+	items: StructuredListItem[],
+): Promise<boolean> {
+	const result = await commitStructuredListEdit({
+		scope,
+		config: getMutableConfig(data, scope),
+		key,
+		items,
+		save: (targetScope, targetConfig) => saveScopeConfig(targetScope, ctx.cwd, targetConfig),
+	});
+	if (!result.ok) {
+		ctx.ui.notify(`Settings not saved: ${result.message}`, "error");
 		return false;
 	}
+	ctx.ui.notify(`Saved ${scope} structured list.`, "info");
+	return true;
+}
+
+async function editScalarItem(ctx: CommandContext, data: SettingsData, scope: EditableSettingsScope, item: SettingsItem): Promise<boolean> {
+	if (!isJsonScalarItem(item)) return false;
 
 	const config = getMutableConfig(data, scope);
 	let value: string | boolean | undefined;
@@ -145,6 +180,169 @@ async function editScalarItem(ctx: CommandContext, data: SettingsData, scope: Ed
 	return true;
 }
 
+async function promptBoolean(ctx: CommandContext, label: string, current: boolean): Promise<boolean | undefined> {
+	const answer = await ctx.ui.input(`${label} (yes/no)`, current ? "yes" : "no");
+	if (answer === undefined) return undefined;
+	const normalized = answer.trim().toLowerCase();
+	if (["y", "yes", "true", "1", "on"].includes(normalized)) return true;
+	if (["n", "no", "false", "0", "off"].includes(normalized)) return false;
+	ctx.ui.notify(`${label} must be yes or no.`, "error");
+	return undefined;
+}
+
+async function buildCompletionStepForm(ctx: CommandContext, existing?: HandoverStep): Promise<HandoverStep | undefined> {
+	const name = await ctx.ui.input("Step name", existing?.name ?? "");
+	if (name === undefined) return undefined;
+	if (!name.trim()) {
+		ctx.ui.notify("Step name cannot be empty.", "error");
+		return undefined;
+	}
+	const description = await ctx.ui.editor("Step description", existing?.description ?? "");
+	if (description === undefined) return undefined;
+	return { name: name.trim(), description };
+}
+
+async function buildPromptContextFieldForm(ctx: CommandContext, existing?: HandoverPromptField): Promise<HandoverPromptField | undefined> {
+	const name = await ctx.ui.input("Field name", existing?.name ?? "");
+	if (name === undefined) return undefined;
+	if (!name.trim()) {
+		ctx.ui.notify("Field name cannot be empty.", "error");
+		return undefined;
+	}
+	if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(name.trim())) {
+		ctx.ui.notify("Field names are safest with letters, numbers, underscores, and dashes.", "info");
+	}
+	const label = await ctx.ui.input("Field label", existing?.label ?? name.trim());
+	if (label === undefined) return undefined;
+	const prompt = await ctx.ui.editor("Field prompt", existing?.prompt ?? (label || name.trim()));
+	if (prompt === undefined) return undefined;
+	const multiline = await promptBoolean(ctx, "Multiline field", existing?.multiline ?? false);
+	if (multiline === undefined) return undefined;
+	const required = await promptBoolean(ctx, "Required field", existing?.required ?? true);
+	if (required === undefined) return undefined;
+	const defaultValue = await ctx.ui.input("Default value (empty for none)", existing?.default ?? "");
+	if (defaultValue === undefined) return undefined;
+	const field: HandoverPromptField = {
+		name: name.trim(),
+		label: label.trim() || name.trim(),
+		prompt: prompt.trim() || label.trim() || name.trim(),
+		multiline,
+		required,
+	};
+	if (defaultValue.trim()) field.default = defaultValue.trim();
+	return field;
+}
+
+async function buildStructuredListItemForm(
+	ctx: CommandContext,
+	key: StructuredListKey,
+	existing?: StructuredListItem,
+): Promise<StructuredListItem | undefined> {
+	return key === "completionSteps"
+		? buildCompletionStepForm(ctx, existing as HandoverStep | undefined)
+		: buildPromptContextFieldForm(ctx, existing as HandoverPromptField | undefined);
+}
+
+function summarizeStructuredListItem(key: StructuredListKey, item: StructuredListItem): string {
+	if (key === "completionSteps") return `${item.name}: ${(item as HandoverStep).description || "No description"}`;
+	const field = item as HandoverPromptField;
+	const flags = [field.multiline ? "multiline" : "single-line", field.required ? "required" : "optional"];
+	return `${field.name}: ${field.label} (${flags.join(", ")})`;
+}
+
+function renderStructuredListEditor(
+	width: number,
+	theme: Parameters<Parameters<NonNullable<CommandContext["ui"]["custom"]>>[0]>[1],
+	label: string,
+	key: StructuredListKey,
+	items: StructuredListItem[],
+	selectedIndex: number,
+): string[] {
+	const bodyWidth = Math.max(20, width - 2);
+	const lines = [theme.fg("accent", theme.bold(label)), ""];
+	if (items.length === 0) lines.push("  No items configured.");
+	items.forEach((item, index) => {
+		const prefix = index === selectedIndex ? "> " : "  ";
+		lines.push(truncate(`${prefix}${summarizeStructuredListItem(key, item)}`, bodyWidth));
+	});
+	lines.push("", "a add • e/Enter edit • d delete • +/- reorder • ↑↓ select • Esc back");
+	return lines.map((line) => truncate(line, bodyWidth));
+}
+
+async function openStructuredListEditor(
+	ctx: CommandContext,
+	data: SettingsData,
+	scope: EditableSettingsScope,
+	item: SettingsItem & { key: StructuredListKey },
+): Promise<void> {
+	const initialItems = item.key === "completionSteps" && isHandoverStepArray(item.value)
+		? item.value
+		: item.key === "promptContextFields" && isPromptFieldArray(item.value)
+			? item.value
+			: [];
+
+	await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
+		let items: StructuredListItem[] = initialItems.map((entry) => ({ ...entry }));
+		let selectedIndex = 0;
+		const clampSelection = () => {
+			selectedIndex = Math.max(0, Math.min(selectedIndex, Math.max(0, items.length - 1)));
+		};
+		const saveItems = async (nextItems: StructuredListItem[]) => {
+			if (!(await saveStructuredList(ctx, data, scope, item.key, nextItems))) return;
+			items = nextItems.map((entry) => ({ ...entry }));
+			clampSelection();
+			tui.requestRender();
+		};
+		const editItem = async (index?: number) => {
+			const existing = index === undefined ? undefined : items[index];
+			const nextItem = await buildStructuredListItemForm(ctx, item.key, existing);
+			if (!nextItem) return;
+			const nextItems = applyStructuredListEdit(item.key, items, index === undefined ? { type: "add", item: nextItem } : { type: "edit", index, item: nextItem });
+			await saveItems(nextItems);
+		};
+		return {
+			focused: true,
+			render(width: number) {
+				return renderStructuredListEditor(width, theme, item.label, item.key, items, selectedIndex);
+			},
+			handleInput(dataKey: string) {
+				if (dataKey === KEY.escape) {
+					done();
+					return;
+				}
+				if (dataKey === KEY.up || dataKey === KEY.down) {
+					selectedIndex += dataKey === KEY.up ? -1 : 1;
+					clampSelection();
+					tui.requestRender();
+					return;
+				}
+				if (dataKey === "a") {
+					void editItem();
+					return;
+				}
+				if (dataKey === "e" || KEY.enter.has(dataKey)) {
+					if (items[selectedIndex]) void editItem(selectedIndex);
+					return;
+				}
+				if (dataKey === "d") {
+					void saveItems(applyStructuredListEdit(item.key, items, { type: "delete", index: selectedIndex }));
+					return;
+				}
+				if (dataKey === "+" || dataKey === "=") {
+					void saveItems(applyStructuredListEdit(item.key, items, { type: "move", index: selectedIndex, delta: 1 }));
+					return;
+				}
+				if (dataKey === "-") {
+					void saveItems(applyStructuredListEdit(item.key, items, { type: "move", index: selectedIndex, delta: -1 }));
+					return;
+				}
+				tui.requestRender();
+			},
+			invalidate() {},
+		};
+	}, { overlay: true, overlayOptions: { width: "70%", maxHeight: "80%", minWidth: 60 } });
+}
+
 function renderSettings(width: number, theme: Parameters<Parameters<NonNullable<CommandContext["ui"]["custom"]>>[0]>[1], state: SettingsUiState, models: Record<EditableSettingsScope, SettingsViewModel>): string[] {
 	const bodyWidth = Math.max(20, width - 2);
 	const model = models[state.activeTab];
@@ -159,7 +357,7 @@ function renderSettings(width: number, theme: Parameters<Parameters<NonNullable<
 	model.items.forEach((item, index) => {
 		const selected = index === selectedIndex;
 		const prefix = selected ? "> " : "  ";
-		const marker = isJsonScalarItem(item) ? "" : " (later)";
+		const marker = item.kind === "markdown" ? " (later)" : "";
 		lines.push(truncate(`${prefix}${item.label}${marker}: ${displayValue(item)}`, bodyWidth));
 	});
 
@@ -167,7 +365,7 @@ function renderSettings(width: number, theme: Parameters<Parameters<NonNullable<
 	if (selected) {
 		lines.push("", truncate(selected.help, bodyWidth));
 	}
-	lines.push("", "Tab/←→ tabs • ↑↓ select • Enter edit/toggle • Esc close");
+	lines.push("", "Tab/←→ tabs • ↑↓ select • Enter edit/toggle/list • Esc close");
 	return lines.map((line) => truncate(line, bodyWidth));
 }
 
@@ -218,11 +416,19 @@ export async function openHandoverSettingsShell(ctx: CommandContext): Promise<vo
 					const scope = state.activeTab;
 					const item = models[scope].items[state.selectedIndex[scope]];
 					if (!item) return;
-					if (isJsonScalarItem(item)) state = reduceSettingsUiState(state, { type: "start-edit", key: item.key }, counts());
-					void editScalarItem(ctx, data, scope, item).then(() => {
-						state = reduceSettingsUiState(state, { type: "finish-edit" }, counts());
-						refresh();
-					});
+					if (isJsonScalarItem(item)) {
+						state = reduceSettingsUiState(state, { type: "start-edit", key: item.key }, counts());
+						void editScalarItem(ctx, data, scope, item).then(() => {
+							state = reduceSettingsUiState(state, { type: "finish-edit" }, counts());
+							refresh();
+						});
+						return;
+					}
+					if (isStructuredListItem(item)) {
+						void openStructuredListEditor(ctx, data, scope, item).then(refresh);
+						return;
+					}
+					ctx.ui.notify("Project rules editing is deferred to the next settings slice.", "info");
 					return;
 				}
 				tui.requestRender();
