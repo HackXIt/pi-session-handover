@@ -10,10 +10,12 @@ import {
 import { buildSettingsViewModel, type SettingsItem, type SettingsViewModel } from "./settings-view-model.js";
 import {
 	applyStructuredListEdit,
+	commitProjectRulesEdit,
 	commitScalarSettingEdit,
 	commitStructuredListEdit,
 	createSettingsUiState,
 	reduceSettingsUiState,
+	type CommitProjectRulesEditResult,
 	type CommitScalarSettingEditResult,
 	type SettingsUiState,
 	type StructuredListItem,
@@ -83,7 +85,7 @@ function isJsonScalarItem(item: SettingsItem): item is SettingsItem & { key: key
 }
 
 function isStructuredListItem(item: SettingsItem): item is SettingsItem & { key: StructuredListKey } {
-	return item.key === "completionSteps" || item.key === "promptContextFields";
+	return item.kind === "list" && (item.key === "completionSteps" || item.key === "promptContextFields");
 }
 
 function isHandoverStepArray(value: unknown): value is HandoverStep[] {
@@ -129,6 +131,14 @@ async function saveScopeConfig(scope: EditableSettingsScope, cwd: string, config
 	return result.ok ? { ok: true } : { ok: false, message: `${result.error.path} contains invalid JSON (${result.error.message})` };
 }
 
+async function saveProjectRules(ctx: CommandContext, data: SettingsData, rules: string): Promise<CommitProjectRulesEditResult> {
+	const paths = getEditableSettingsTargetPaths("project", ctx.cwd);
+	const result = await saveEditableSettingsTarget({ ...paths, config: data.projectConfig, projectRules: rules });
+	if (!result.ok) return { ok: false, message: `${result.error.path} contains invalid JSON (${result.error.message})` };
+	data.projectRules = rules;
+	return { ok: true };
+}
+
 async function saveStructuredList(
 	ctx: CommandContext,
 	data: SettingsData,
@@ -148,6 +158,18 @@ async function saveStructuredList(
 		return false;
 	}
 	ctx.ui.notify(`Saved ${scope} structured list.`, "info");
+	return true;
+}
+
+async function editProjectRules(ctx: CommandContext, data: SettingsData, item: SettingsItem): Promise<boolean> {
+	const rules = await ctx.ui.editor(item.label, typeof item.value === "string" ? item.value : "");
+	if (rules === undefined) return false;
+	const result = await commitProjectRulesEdit({ rules, save: (nextRules) => saveProjectRules(ctx, data, nextRules) });
+	if (!result.ok) {
+		ctx.ui.notify(`Project rules not saved: ${result.message}`, "error");
+		return false;
+	}
+	ctx.ui.notify("Saved project handover rules.", "info");
 	return true;
 }
 
@@ -357,8 +379,7 @@ function renderSettings(width: number, theme: Parameters<Parameters<NonNullable<
 	model.items.forEach((item, index) => {
 		const selected = index === selectedIndex;
 		const prefix = selected ? "> " : "  ";
-		const marker = item.kind === "markdown" ? " (later)" : "";
-		lines.push(truncate(`${prefix}${item.label}${marker}: ${displayValue(item)}`, bodyWidth));
+		lines.push(truncate(`${prefix}${item.label}: ${displayValue(item)}`, bodyWidth));
 	});
 
 	const selected = model.items[selectedIndex];
@@ -416,19 +437,22 @@ export async function openHandoverSettingsShell(ctx: CommandContext): Promise<vo
 					const scope = state.activeTab;
 					const item = models[scope].items[state.selectedIndex[scope]];
 					if (!item) return;
-					if (isJsonScalarItem(item)) {
-						state = reduceSettingsUiState(state, { type: "start-edit", key: item.key }, counts());
+					if (item.kind === "boolean" || item.kind === "string" || item.kind === "multiline") {
+						state = reduceSettingsUiState(state, { type: "start-edit", key: item.key as keyof HandoverConfig }, counts());
 						void editScalarItem(ctx, data, scope, item).then(() => {
 							state = reduceSettingsUiState(state, { type: "finish-edit" }, counts());
 							refresh();
 						});
 						return;
 					}
+					if (item.kind === "markdown" && item.key === "projectRules" && scope === "project") {
+						void editProjectRules(ctx, data, item).then(refresh);
+						return;
+					}
 					if (isStructuredListItem(item)) {
 						void openStructuredListEditor(ctx, data, scope, item).then(refresh);
 						return;
 					}
-					ctx.ui.notify("Project rules editing is deferred to the next settings slice.", "info");
 					return;
 				}
 				tui.requestRender();

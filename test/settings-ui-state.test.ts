@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	applyStructuredListEdit,
+	commitProjectRulesEdit,
 	commitScalarSettingEdit,
 	commitStructuredListEdit,
 	createSettingsUiState,
@@ -67,6 +68,25 @@ describe("settings UI state", () => {
 
 		expect(config).toEqual({ taskInputPrompt: "Continue next slice?" });
 		expect(save).toHaveBeenCalledWith("project", { taskInputPrompt: "Continue next slice?" });
+	});
+
+	it("persists confirmed project rules markdown immediately through the provided save callback", async () => {
+		const save = vi.fn(async () => ({ ok: true as const }));
+
+		await expect(commitProjectRulesEdit({ rules: "# Handover rules\nVerify before handover.\n", save })).resolves.toEqual({
+			ok: true,
+		});
+
+		expect(save).toHaveBeenCalledWith("# Handover rules\nVerify before handover.\n");
+	});
+
+	it("keeps existing project rules in memory when markdown save fails", async () => {
+		const save = vi.fn(async () => ({ ok: false as const, message: "cannot write .pi/handover.md" }));
+
+		await expect(commitProjectRulesEdit({ rules: "", save })).resolves.toEqual({
+			ok: false,
+			message: "cannot write .pi/handover.md",
+		});
 	});
 
 	it("applies completion step add, edit, delete, and reorder operations", () => {

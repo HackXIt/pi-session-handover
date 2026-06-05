@@ -75,4 +75,22 @@ describe("editable settings target config IO", () => {
 			projectRules: "Always mention verification.\n",
 		});
 	});
+
+	it("clears project markdown rules by saving an empty file", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "handover-settings-config-"));
+		const jsonPath = join(dir, ".pi", "handover.json");
+		const markdownPath = join(dir, ".pi", "handover.md");
+		await saveEditableSettingsTarget({ jsonPath, markdownPath, config: {}, projectRules: "Old rules\n" });
+
+		await expect(saveEditableSettingsTarget({ jsonPath, markdownPath, config: {}, projectRules: "" })).resolves.toEqual({
+			ok: true,
+		});
+
+		await expect(readFile(markdownPath, "utf8")).resolves.toBe("");
+		await expect(loadEditableSettingsTarget({ jsonPath, markdownPath })).resolves.toEqual({
+			ok: true,
+			config: {},
+			projectRules: "",
+		});
+	});
 });

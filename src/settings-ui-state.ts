@@ -19,6 +19,7 @@ export type SettingsItemCounts = Record<SettingsUiTab, number>;
 
 export type CommitScalarSettingEditResult = { ok: true } | { ok: false; message: string };
 export type CommitStructuredListEditResult = { ok: true } | { ok: false; message: string };
+export type CommitProjectRulesEditResult = { ok: true } | { ok: false; message: string };
 
 export type StructuredListKey = "completionSteps" | "promptContextFields";
 export type StructuredListItem = HandoverStep | HandoverPromptField;
@@ -43,6 +44,11 @@ export type CommitStructuredListEditOptions = {
 	key: StructuredListKey;
 	items: StructuredListItem[];
 	save: (scope: EditableSettingsScope, config: EditableHandoverConfig) => Promise<CommitStructuredListEditResult>;
+};
+
+export type CommitProjectRulesEditOptions = {
+	rules: string;
+	save: (rules: string) => Promise<CommitProjectRulesEditResult>;
 };
 
 const TABS: SettingsUiTab[] = ["global", "project"];
@@ -143,4 +149,8 @@ export async function commitStructuredListEdit(
 	const result = await options.save(options.scope, nextConfig);
 	if (result.ok) Object.assign(options.config, nextConfig);
 	return result;
+}
+
+export async function commitProjectRulesEdit(options: CommitProjectRulesEditOptions): Promise<CommitProjectRulesEditResult> {
+	return options.save(options.rules);
 }
