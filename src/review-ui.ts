@@ -1,10 +1,65 @@
+import { stripVTControlCharacters } from "node:util";
 import { ExtensionEditorComponent, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { PendingHandover } from "./domain.js";
 
 type CommandContext = Parameters<Parameters<ExtensionAPI["registerCommand"]>[1]["handler"]>[1];
+type CustomFactory = Parameters<NonNullable<CommandContext["ui"]["custom"]>>[0];
+type CustomTheme = Parameters<CustomFactory>[1];
+
+function visibleLength(text: string): number {
+	return stripVTControlCharacters(text).length;
+}
 
 function truncate(text: string, width: number): string {
-	return text.length > width ? `${text.slice(0, Math.max(0, width - 1))}…` : text;
+	if (visibleLength(text) <= width) return text;
+	return `${stripVTControlCharacters(text).slice(0, Math.max(0, width - 1))}…`;
+}
+
+function pad(text: string, width: number): string {
+	return `${text}${" ".repeat(Math.max(0, width - visibleLength(text)))}`;
+}
+
+function wrapPlainLine(line: string, width: number): string[] {
+	if (!line) return [""];
+	const words = line.split(/(\s+)/);
+	const lines: string[] = [];
+	let current = "";
+	for (const word of words) {
+		if (!word) continue;
+		if (visibleLength(current + word) <= width) {
+			current += word;
+			continue;
+		}
+		if (current.trim()) lines.push(current.trimEnd());
+		current = word.trimStart();
+		while (visibleLength(current) > width) {
+			lines.push(current.slice(0, width));
+			current = current.slice(width);
+		}
+	}
+	if (current || lines.length === 0) lines.push(current.trimEnd());
+	return lines;
+}
+
+function wrapPlainText(text: string, width: number): string[] {
+	return text.split("\n").flatMap((line) => wrapPlainLine(line, width));
+}
+
+function renderBox(theme: CustomTheme, width: number, title: string, body: string[]): string[] {
+	const contentWidth = Math.max(20, width - 4);
+	const boxWidth = contentWidth + 4;
+	const horizontalWidth = boxWidth - 2;
+	const border = (text: string) => theme.fg("borderAccent", text);
+	const titleText = ` ${title} `;
+	const titleWidth = Math.min(titleText.length, horizontalWidth);
+	const left = Math.max(0, Math.floor((horizontalWidth - titleWidth) / 2));
+	const right = Math.max(0, horizontalWidth - titleWidth - left);
+	const lines = [
+		border(`╭${"─".repeat(left)}`) + theme.fg("accent", theme.bold(truncate(titleText, titleWidth))) + border(`${"─".repeat(right)}╮`),
+	];
+	for (const line of body) lines.push(border("│ ") + pad(truncate(line, contentWidth), contentWidth) + border(" │"));
+	lines.push(border(`╰${"─".repeat(horizontalWidth)}╯`));
+	return lines;
 }
 
 function checklistLine(item: PendingHandover["checklist"][number]): string {
@@ -37,20 +92,20 @@ export async function reviewPendingHandover(ctx: CommandContext, item: PendingHa
 			},
 			render(width: number) {
 				const bodyWidth = Math.max(20, width - 4);
+				const textWidth = Math.max(10, bodyWidth - 2);
 				const header = [
-					theme.fg("accent", theme.bold("Handover review")),
 					pendingSummary(item),
 					"Accept by submitting the editor; cancel with the editor cancel keybinding.",
 					"",
 					theme.fg("accent", "Summary"),
-					...(item.summary ? item.summary.split("\n") : ["(none)"]),
+					...(item.summary ? wrapPlainText(item.summary, textWidth) : ["(none)"]),
 					"",
 					theme.fg("accent", "Checklist"),
-					...(item.checklist.length > 0 ? item.checklist.map(checklistLine) : ["(none supplied)"]),
+					...(item.checklist.length > 0 ? item.checklist.flatMap((entry) => wrapPlainText(checklistLine(entry), textWidth)) : ["(none supplied)"]),
 					"",
 					theme.fg("accent", "Next-session prompt"),
 				];
-				return [...header.map((line) => truncate(line, bodyWidth)), ...editor.render(width)];
+				return [...renderBox(theme, width, "Handover review", header), ...editor.render(width)];
 			},
 			handleInput(data: string) {
 				editor.handleInput(data);
