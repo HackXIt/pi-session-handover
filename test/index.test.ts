@@ -106,15 +106,18 @@ function createContext(cwd: string, entries: Entry[] = []) {
 
 function createPi(ctx: FakeContext) {
 	const commands = new Map<string, (args: string, ctx: FakeContext) => Promise<void>>();
+	const commandDescriptions = new Map<string, string>();
 	let tool: { execute: (...args: any[]) => Promise<unknown> } | undefined;
 	const pi = {
 		commands,
+		commandDescriptions,
 		get tool() {
 			return tool;
 		},
 		on: vi.fn(),
-		registerCommand: vi.fn((name: string, config: { handler: (args: string, ctx: FakeContext) => Promise<void> }) => {
+		registerCommand: vi.fn((name: string, config: { description?: string; handler: (args: string, ctx: FakeContext) => Promise<void> }) => {
 			commands.set(name, config.handler);
+			if (config.description) commandDescriptions.set(name, config.description);
 		}),
 		registerTool: vi.fn((registered: { execute: (...args: any[]) => Promise<unknown> }) => {
 			tool = registered;
@@ -168,6 +171,34 @@ describe("handover extension flows", () => {
 
 		expect(ctx.notifications.at(-1)).toEqual({
 			message: "Usage: /handover <what the next agent should continue>",
+			level: "error",
+		});
+		expect(ctx.sentUserMessages).toEqual([]);
+	});
+
+	it("opens the settings UI shell from /handover settings", async () => {
+		const cwd = await createCwd();
+		const ctx = createContext(cwd);
+		const pi = createPi(ctx);
+
+		await pi.commands.get("handover")!("settings", ctx);
+
+		expect(ctx.ui.custom).toHaveBeenCalledTimes(1);
+		expect(ctx.sentUserMessages).toEqual([]);
+		expect(ctx.ui.input).not.toHaveBeenCalled();
+		expect(pi.commandDescriptions.get("handover")).toContain("settings");
+	});
+
+	it("reports an actionable settings error when custom UI is unavailable", async () => {
+		const cwd = await createCwd();
+		const ctx = createContext(cwd);
+		(ctx.ui as { custom?: unknown }).custom = undefined;
+		const pi = createPi(ctx);
+
+		await pi.commands.get("handover")!("settings", ctx);
+
+		expect(ctx.notifications.at(-1)).toEqual({
+			message: "Settings UI is unavailable in this context. Run /handover settings from an interactive pi session.",
 			level: "error",
 		});
 		expect(ctx.sentUserMessages).toEqual([]);

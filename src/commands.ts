@@ -12,13 +12,18 @@ import { buildAgentHandoverRequest } from "./prompt.js";
 import { collectPromptContext } from "./prompt-context.js";
 import type { HandoverRuntimeState } from "./pending-store.js";
 import { pendingSummary, reviewPendingHandover } from "./review-ui.js";
+import { openHandoverSettingsShell } from "./settings-ui.js";
 
 export function registerHandoverCommands(pi: ExtensionAPI, state: HandoverRuntimeState, makeId: () => string): void {
 	pi.registerCommand("handover", {
-		description: "Close this turn and hand over to a fresh pi session",
+		description: "Close this turn and hand over to a fresh pi session. Subcommands: auto, status, cancel, settings.",
 		handler: async (args, ctx) => {
 			const subcommand = args.trim();
 			const [command, ...rest] = subcommand.split(/\s+/);
+			if (subcommand === "settings") {
+				await openHandoverSettingsShell(ctx);
+				return;
+			}
 			const config = await loadHandoverConfig(ctx.cwd, { entries: ctx.sessionManager.getEntries() });
 			if (command === "auto") {
 				const autoArgs = rest.join(" ");
