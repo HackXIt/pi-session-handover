@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PendingHandover } from "../src/domain.js";
-import { buildReviewHeaderLines } from "../src/review-ui.js";
+import { buildReviewHeaderLines, buildReviewIntroLines } from "../src/review-ui.js";
 
 function pending(overrides: Partial<PendingHandover> = {}): PendingHandover {
 	return {
@@ -42,5 +42,12 @@ describe("handover review header", () => {
 		expect(lines).toContain("! Verify — CI unavailable");
 		expect(lines).toContain("- Publish");
 		expect(lines.join("\n")).not.toContain("full logs omitted");
+	});
+
+	it("uses plain header chrome so it does not stack borders above the editor", () => {
+		const lines = buildReviewIntroLines(pending(), 80);
+
+		expect(lines[0]).toBe("Handover review");
+		expect(lines.join("\n")).not.toMatch(/[╭╮╰╯│─]/);
 	});
 });

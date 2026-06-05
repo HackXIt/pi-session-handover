@@ -15,10 +15,6 @@ function truncate(text: string, width: number): string {
 	return `${stripVTControlCharacters(text).slice(0, Math.max(0, width - 1))}…`;
 }
 
-function pad(text: string, width: number): string {
-	return `${text}${" ".repeat(Math.max(0, width - visibleLength(text)))}`;
-}
-
 function wrapPlainLine(line: string, width: number): string[] {
 	if (!line) return [""];
 	const words = line.split(/(\s+)/);
@@ -43,23 +39,6 @@ function wrapPlainLine(line: string, width: number): string[] {
 
 function wrapPlainText(text: string, width: number): string[] {
 	return text.split("\n").flatMap((line) => wrapPlainLine(line, width));
-}
-
-function renderBox(theme: CustomTheme, width: number, title: string, body: string[]): string[] {
-	const contentWidth = Math.max(20, width - 4);
-	const boxWidth = contentWidth + 4;
-	const horizontalWidth = boxWidth - 2;
-	const border = (text: string) => theme.fg("borderAccent", text);
-	const titleText = ` ${title} `;
-	const titleWidth = Math.min(titleText.length, horizontalWidth);
-	const left = Math.max(0, Math.floor((horizontalWidth - titleWidth) / 2));
-	const right = Math.max(0, horizontalWidth - titleWidth - left);
-	const lines = [
-		border(`╭${"─".repeat(left)}`) + theme.fg("accent", theme.bold(truncate(titleText, titleWidth))) + border(`${"─".repeat(right)}╮`),
-	];
-	for (const line of body) lines.push(border("│ ") + pad(truncate(line, contentWidth), contentWidth) + border(" │"));
-	lines.push(border(`╰${"─".repeat(horizontalWidth)}╯`));
-	return lines;
 }
 
 function checklistLine(item: PendingHandover["checklist"][number]): string {
@@ -101,6 +80,17 @@ export function buildReviewHeaderLines(item: PendingHandover, textWidth: number)
 	];
 }
 
+export function buildReviewIntroLines(item: PendingHandover, textWidth: number): string[] {
+	return ["Handover review", "", ...buildReviewHeaderLines(item, textWidth), ""];
+}
+
+function styleReviewIntroLine(theme: CustomTheme, line: string): string {
+	if (line === "Handover review") return theme.fg("accent", theme.bold(line));
+	if (line === "Summary" || line === "Next-session prompt") return theme.fg("accent", line);
+	if (line.startsWith("Checklist:")) return theme.fg("accent", line);
+	return line;
+}
+
 export async function reviewPendingHandover(ctx: CommandContext, item: PendingHandover): Promise<string | undefined> {
 	return ctx.ui.custom<string | undefined>((tui, theme, keybindings, done) => {
 		const editor = new ExtensionEditorComponent(
@@ -119,14 +109,9 @@ export async function reviewPendingHandover(ctx: CommandContext, item: PendingHa
 				editor.focused = value;
 			},
 			render(width: number) {
-				const bodyWidth = Math.max(20, width - 4);
-				const textWidth = Math.max(10, bodyWidth - 2);
-				const header = buildReviewHeaderLines(item, textWidth).map((line) => {
-					if (line === "Summary" || line === "Next-session prompt") return theme.fg("accent", line);
-					if (line.startsWith("Checklist:")) return theme.fg("accent", line);
-					return line;
-				});
-				return [...renderBox(theme, width, "Handover review", header), ...editor.render(width)];
+				const textWidth = Math.max(10, width);
+				const header = buildReviewIntroLines(item, textWidth).map((line) => styleReviewIntroLine(theme, truncate(line, width)));
+				return [...header, ...editor.render(width)];
 			},
 			handleInput(data: string) {
 				editor.handleInput(data);
