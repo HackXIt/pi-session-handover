@@ -10,6 +10,7 @@ import {
 	HANDOVER_RESOLVED_ENTRY,
 	type PendingHandover,
 } from "../src/domain.js";
+import { AUTO_CONTINUATION_MARKER } from "../src/prompt.js";
 
 type Entry = { type: string; customType?: string; data?: unknown };
 
@@ -436,7 +437,7 @@ describe("handover extension flows", () => {
 		expect(result).toMatchObject({ terminate: true, details: { checklist: [{ name: "Build", status: "done" }] } });
 	});
 
-	it("handover_complete skips prompt review in auto mode by default", async () => {
+	it("handover_complete in auto mode persists an augmented prompt and skips prompt review by default", async () => {
 		const cwd = await createCwd({ reviewPromptBeforeStart: true });
 		const auto = {
 			chainId: "chain",
@@ -462,11 +463,14 @@ describe("handover extension flows", () => {
 		);
 
 		const pendingEntry = ctx.sessionManager.getEntries().find((entry) => entry.customType === HANDOVER_PENDING_ENTRY);
-		expect(pendingEntry?.data).toMatchObject({
-			nextPrompt: "continue automatically",
+		const pending = pendingEntry?.data as PendingHandover | undefined;
+		expect(pending).toMatchObject({
 			reviewPromptBeforeStart: false,
 			auto: { chainId: "chain" },
 		});
+		expect(pending?.nextPrompt).toContain("continue automatically");
+		expect(pending?.nextPrompt).toContain(AUTO_CONTINUATION_MARKER);
+		expect(pending?.nextPrompt).toContain("handover_complete");
 	});
 
 	it("handover_complete can be configured to review prompts in auto mode", async () => {
@@ -486,7 +490,8 @@ describe("handover extension flows", () => {
 		await pi.tool!.execute("call", { nextPrompt: "review automatically" }, undefined, undefined, ctx);
 
 		const pendingEntry = ctx.sessionManager.getEntries().find((entry) => entry.customType === HANDOVER_PENDING_ENTRY);
-		expect(pendingEntry?.data).toMatchObject({ nextPrompt: "review automatically", reviewPromptBeforeStart: true });
+		expect(pendingEntry?.data).toMatchObject({ reviewPromptBeforeStart: true });
+		expect((pendingEntry?.data as PendingHandover | undefined)?.nextPrompt).toContain(AUTO_CONTINUATION_MARKER);
 	});
 
 	it("handover-continue starts the replacement session and resolves pending state after success", async () => {
@@ -565,6 +570,30 @@ describe("handover extension flows", () => {
 			maxDepth: 3,
 			armed: true,
 		});
+	});
+
+	it("handover-continue sends the augmented auto prompt from handover_complete to the replacement session", async () => {
+		const cwd = await createCwd();
+		const auto = {
+			chainId: "chain",
+			depth: 1,
+			maxDepth: 3,
+			armed: true,
+			createdAt: "2026-06-05T00:00:00.000Z",
+			updatedAt: "2026-06-05T00:00:00.000Z",
+		};
+		const entries: Entry[] = [{ type: "custom", customType: HANDOVER_AUTO_STATE_ENTRY, data: auto }];
+		const ctx = createContext(cwd, entries);
+		const pi = createPi(ctx);
+
+		await pi.tool!.execute("call", { nextPrompt: "bare next prompt" }, undefined, undefined, ctx);
+		const pending = entries.find((entry) => entry.customType === HANDOVER_PENDING_ENTRY)?.data as PendingHandover;
+		await pi.commands.get("handover-continue")!(pending.id, ctx);
+
+		expect(ctx.replacementMessages).toHaveLength(1);
+		expect(ctx.replacementMessages[0]).toContain("bare next prompt");
+		expect(ctx.replacementMessages[0]).toContain(AUTO_CONTINUATION_MARKER);
+		expect(ctx.replacementMessages[0]).toContain("handover_complete");
 	});
 
 	it("handover-continue remains pending when prompt review is cancelled", async () => {

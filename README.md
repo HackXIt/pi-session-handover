@@ -82,6 +82,8 @@ Create `.pi/handover.md` for longer project-specific rules. Its contents are app
 
 `reviewPromptBeforeStart` controls manual handovers. It also forces review when a closure checklist item is blocked. `autoReviewPromptBeforeStart` controls automatic handover chains separately and defaults to `false`, so auto mode continues without showing the prompt-review modal unless the project explicitly opts in.
 
+Project `nextPromptInstructions` should describe the substantive handover content the next agent needs. They do not need to repeat the `/handover auto` continuation wording; auto mode injects that guardrail automatically.
+
 Use the same JSON shape for global user config when you want defaults across projects. Keep global config minimal, for example:
 
 ```json
@@ -95,7 +97,7 @@ Use the same JSON shape for global user config when you want defaults across pro
 
 - `/handover <description>` — ask the current agent to close and prepare a new-session prompt.
 - `/handover settings` — open the Global/Project settings editor for JSON settings and project markdown handover rules.
-- `/handover auto [maxDepth]` — arm bounded automatic handover carry-forward for this session. This is not an independent trigger system: the current agent still completes work and calls `handover_complete`, and the extension carries auto metadata into replacement sessions until `maxDepth` is reached. If `maxDepth` is omitted, the extension tries to infer it from configured plan/task context, then asks.
+- `/handover auto [maxDepth]` — arm bounded automatic handover carry-forward for this session. This is not an independent trigger system: the current agent still completes work and calls `handover_complete`, and the extension carries auto metadata into replacement sessions until `maxDepth` is reached. While auto mode has remaining depth, the extension also appends a canonical `## Automatic handover continuation` block to each replacement prompt so the next agent is explicitly told to continue the chain with `handover_complete`. If the chain is already at max depth, the extension appends a stop note instead and does not carry auto metadata forward. If `maxDepth` is omitted, the extension tries to infer it from configured plan/task context, then asks.
 - `/handover status` — inspect pending handover state and armed auto mode, then resume/cancel after reload.
 - `/handover cancel` — cancel pending handover and armed auto state.
 - `handover_complete` — tool the current agent calls with the final `nextPrompt`, summary, and closure checklist.

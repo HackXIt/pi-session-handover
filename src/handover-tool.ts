@@ -4,6 +4,7 @@ import type { Static } from "@sinclair/typebox";
 import { loadHandoverConfig } from "./config.js";
 import { HANDOVER_PENDING_ENTRY, normalizeChecklist, shouldReviewHandover, type PendingHandover } from "./domain.js";
 import type { HandoverRuntimeState } from "./pending-store.js";
+import { ensureAutoContinuationInstructions } from "./prompt.js";
 
 const checklistItemSchema = Type.Union([
 	Type.String(),
@@ -46,9 +47,10 @@ export function registerHandoverTool(pi: ExtensionAPI, state: HandoverRuntimeSta
 			const checklist = normalizeChecklist(params.completedSteps ?? []);
 			const id = makeId();
 			const auto = state.getAuto(ctx);
+			const nextPrompt = auto ? ensureAutoContinuationInstructions(params.nextPrompt, auto) : params.nextPrompt;
 			const item: PendingHandover = {
 				id,
-				nextPrompt: params.nextPrompt,
+				nextPrompt,
 				summary: params.summary,
 				checklist,
 				parentSession: ctx.sessionManager.getSessionFile(),

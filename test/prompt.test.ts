@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { defaultConfig } from "../src/config.js";
-import { buildAgentHandoverRequest } from "../src/prompt.js";
+import { AUTO_CONTINUATION_MARKER, buildAgentHandoverRequest, ensureAutoContinuationInstructions } from "../src/prompt.js";
 
 it("builds the exact continuation request with closure rules", () => {
 	const prompt = buildAgentHandoverRequest("phase 2 of docs/PLAN.md", {
@@ -38,4 +38,53 @@ it("includes automatic handover chain instructions", () => {
 
 	expect(prompt).toContain("## Automatic handover mode");
 	expect(prompt).toContain("depth 2/5");
+});
+
+it("appends automatic continuation instructions to a next-session prompt", () => {
+	const prompt = ensureAutoContinuationInstructions("Continue the plan work from here.", {
+		chainId: "chain",
+		depth: 4,
+		maxDepth: 10,
+		armed: true,
+		createdAt: "now",
+		updatedAt: "now",
+	});
+
+	expect(prompt).toContain("Continue the plan work from here.");
+	expect(prompt).toContain(AUTO_CONTINUATION_MARKER);
+	expect(prompt).toContain("chain chain");
+	expect(prompt).toContain("5/10");
+	expect(prompt).toContain("handover_complete");
+	expect(prompt).toContain("self-contained");
+});
+
+it("does not duplicate automatic continuation instructions", () => {
+	const original = `Continue.\n\n${AUTO_CONTINUATION_MARKER}\n\nExisting canonical block.`;
+	const prompt = ensureAutoContinuationInstructions(original, {
+		chainId: "chain",
+		depth: 1,
+		maxDepth: 3,
+		armed: true,
+		createdAt: "now",
+		updatedAt: "now",
+	});
+
+	expect(prompt).toBe(original);
+	expect(prompt.match(new RegExp(AUTO_CONTINUATION_MARKER, "g"))?.length).toBe(1);
+});
+
+it("appends an explicit stop note at automatic handover max depth", () => {
+	const prompt = ensureAutoContinuationInstructions("Final follow-up.", {
+		chainId: "chain",
+		depth: 3,
+		maxDepth: 3,
+		armed: true,
+		createdAt: "now",
+		updatedAt: "now",
+	});
+
+	expect(prompt).toContain(AUTO_CONTINUATION_MARKER);
+	expect(prompt).toContain("has reached its max depth (3/3)");
+	expect(prompt).toContain("Do not continue the automatic chain");
+	expect(prompt).not.toContain("Before ending this turn, call `handover_complete`");
 });
