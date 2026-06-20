@@ -14,7 +14,7 @@ export function ensureAutoContinuationInstructions(nextPrompt: string, auto: Aut
 	}
 
 	const nextDepth = auto.depth + 1;
-	return `${nextPrompt}${separator}${AUTO_CONTINUATION_MARKER}\n\nThis session is part of \`/handover auto\` chain ${auto.chainId}. Auto depth after this handover is ${nextDepth}/${auto.maxDepth}.\n\nBefore ending this turn, call \`handover_complete\` as your final tool call if there is any remaining work for the chain. The next prompt you provide must be self-contained for a fresh pi session: include current state, changed files, validation, blockers, exact next slice, and this automatic handover continuation instruction. Stop instead of continuing if the work is complete, blocked, or the max depth has been reached.`;
+	return `${nextPrompt}${separator}${AUTO_CONTINUATION_MARKER}\n\nThis session is part of \`/handover auto\` chain ${auto.chainId}. Auto depth after this handover is ${nextDepth}/${auto.maxDepth}.\n\nBefore ending this turn, call \`handover_complete\` as your final tool call if there is any remaining work for the chain. The next prompt you provide must be self-contained for a fresh pi session: include current state, changed files, validation, blockers, and exact next slice. Do not include this automatic handover continuation section in that nextPrompt; the extension appends it automatically. Stop instead of continuing if the work is complete, blocked, or the max depth has been reached.`;
 }
 
 export function buildAgentHandoverRequest(description: string, config: HandoverConfig, context: HandoverPromptContext = {}, auto?: AutoHandoverState): string {

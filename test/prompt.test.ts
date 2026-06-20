@@ -57,6 +57,8 @@ it("appends automatic continuation instructions to a next-session prompt", () =>
 	expect(prompt).toContain("5/10");
 	expect(prompt).toContain("handover_complete");
 	expect(prompt).toContain("self-contained");
+	expect(prompt).toContain("include current state, changed files, validation, blockers, and exact next slice");
+	expect(prompt).not.toContain("and this automatic handover continuation instruction");
 });
 
 it("does not duplicate automatic continuation instructions", () => {
