@@ -38,6 +38,7 @@ it("includes automatic handover chain instructions", () => {
 
 	expect(prompt).toContain("## Automatic handover mode");
 	expect(prompt).toContain("depth 2/5");
+	expect(prompt).toContain("Do not copy this automatic handover mode note into nextPrompt");
 });
 
 it("appends automatic continuation instructions to a next-session prompt", () => {

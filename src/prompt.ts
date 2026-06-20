@@ -30,7 +30,7 @@ export function buildAgentHandoverRequest(description: string, config: HandoverC
 			.join("\n")}`
 		: "";
 	const autoBlock = auto?.armed
-		? `\n\n## Automatic handover mode\n\nThis session is armed for automatic handover chain ${auto.chainId} at depth ${auto.depth}/${auto.maxDepth}. If there is another slice remaining after this turn, prepare the next handover prompt so the chain can continue. Do not exceed the max depth.`
+		? `\n\n## Automatic handover mode\n\nThis session is armed for automatic handover chain ${auto.chainId} at depth ${auto.depth}/${auto.maxDepth}. If there is another slice remaining after this turn, call handover_complete with a nextPrompt for the next agent so the chain can continue. Do not exceed the max depth. Do not copy this automatic handover mode note into nextPrompt; the extension carries chain state into replacement sessions automatically.`
 		: "";
 
 	return `Please write a prompt for a new agent session to continue ${description} and take over from here.${contextBlock}${autoBlock}
